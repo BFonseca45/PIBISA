@@ -1,0 +1,10 @@
+/elasticface/*
+/out/*
+/pre_trained_models/*
+/.vscode/*
+/__pycache__/*
+/*ipynb
+/test_images
+/test_path
+/multirun
+/outputs
