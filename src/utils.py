@@ -9,69 +9,71 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, return_negative:bool=False, n_masks:int=20, beta:int=10) -> np.array:
+def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, loss_mode='cosine_sim', return_negative:bool=False, n_masks:int=20, beta:int=10) -> np.array:
     # computing the target embedding
-    if model._get_name() == 'CLIP':
-        assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
-        y_target = x_target
-    else:
-        y_target = model(x_target)
+    with torch.no_grad():
+        with torch.enable_grad():
+            if model._get_name() == 'CLIP':
+                assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
+                y_target = x_target
+            else:
+                y_target = model(x_target)
 
-    # setting the flag for computing positive/negative relations
-    if return_negative:
-        y_flag = -torch.ones(1)
-    else:
-        y_flag = torch.ones(1)
+            # setting the flag for computing positive/negative relations
+            if return_negative:
+                y_flag = -torch.ones(1, dtype=torch.long)
+            else:
+                y_flag = torch.ones(1, dtype=torch.long)
 
-    # defining the bottleneck layer
-    ms = int(np.ceil(x.shape[-1]/32))
-    new_layer = InfoLayer(mask_range=3, mask_size=ms, input_size=x.shape[-1])
-    new_layer = new_layer.to(device=device)
+            # defining the bottleneck layer
+            ms = int(np.ceil(x.shape[-1]/32))
+            new_layer = InfoLayer(mask_range=3, mask_size=ms, input_size=x.shape[-1])
+            new_layer = new_layer.to(device=device)
 
-    # placing the bottleneck in the target model
-    new_core = InfoModel(core=model, bottleneck=new_layer)
-    new_core = new_core.to(device=device)
+            # placing the bottleneck in the target model
+            new_core = InfoModel(core=model, bottleneck=new_layer)
+            new_core = new_core.to(device=device)
 
-    # losses and parameters
-    P = list(new_core.parameters())
-    optimizer = torch.optim.Adam(P, lr=1)
+            # losses and parameters
+            P = list(new_core.parameters())
+            optimizer = torch.optim.Adam(P, lr=1)
 
-    k = np.prod(x.shape)
-    loss_inf = InfoLoss(beta=beta/k, phi=1/k)
-    loss_cos = torch.nn.CosineEmbeddingLoss()
+            k = np.prod(x.shape)
+            loss_inf = InfoLoss(beta=beta/k, phi=1/k)
+            loss_sim = SimilarityLoss(mode=loss_mode)
 
-    # computing the saliency
-    final_saliency = 0
-    for _ in range(n_masks):
-        new_core.reset_model()
-        final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_cos, loss_inf=loss_inf, sigma=1, opt=optimizer, epochs=10)
+            # computing the saliency
+            final_saliency = 0
+            for _ in range(n_masks):
+                new_core.reset_model()
+                final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, sigma=1, opt=optimizer, epochs=10)
 
-    final_saliency = np.squeeze(final_saliency)
-    final_saliency = (final_saliency - np.min(final_saliency))/(np.max(final_saliency) - np.min(final_saliency))
+            final_saliency = np.squeeze(final_saliency)
+            final_saliency = (final_saliency - np.min(final_saliency))/(np.max(final_saliency) - np.min(final_saliency))
 
     return final_saliency
 
-def compute_pairs(x1, x2, model, mode='diff', n_masks=20,beta=10):
+def compute_pairs(x1, x2, model, mode='diff', loss_mode='cosine_sim', n_masks=20,beta=10):
     if mode == 'diff':
-        s_pos = compute_saliency(x=x1, x_target=x2, model=model, return_negative=False, n_masks=n_masks, beta=beta)
-        s_neg = compute_saliency(x=x1, x_target=x2, model=model, return_negative=True, n_masks=n_masks, beta=beta)
+        s_pos = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta)
+        s_neg = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta)
         sfinal_x1 = s_pos - s_neg
 
-        s_pos = compute_saliency(x=x2, x_target=x1, model=model, return_negative=False, n_masks=n_masks, beta=beta)
-        s_neg = compute_saliency(x=x2, x_target=x1, model=model, return_negative=True, n_masks=n_masks, beta=beta)
+        s_pos = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta)
+        s_neg = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta)
         sfinal_x2 = s_pos - s_neg
 
         return sfinal_x1, sfinal_x2
 
     elif mode == 'pos':
-        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, return_negative=False, beta=beta)
-        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, return_negative=False, beta=beta)
+        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, beta=beta)
+        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, beta=beta)
 
         return sfinal_x1, sfinal_x2
 
     elif mode == 'neg':
-        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, return_negative=True, beta=beta)
-        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, return_negative=True, beta=beta)
+        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, beta=beta)
+        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, beta=beta)
 
         return sfinal_x1, sfinal_x2
 

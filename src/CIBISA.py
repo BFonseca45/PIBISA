@@ -71,6 +71,29 @@ class InfoLoss(nn.Module):
 
         return complexity_loss + variation_loss
 
+class SimilarityLoss(nn.Module):
+    def __init__(self, mode='cosine_sim'):
+        super(SimilarityLoss, self).__init__()
+
+        if mode == 'cosine_sim':
+            self.loss_sim = torch.nn.CosineEmbeddingLoss()
+        elif mode == 'mse':
+            self.loss_sim = torch.nn.MSELoss()
+        else:
+            raise AssertionError("Enter a valid mode: ['cosine_sim', 'mse']")
+
+    def forward(self, y_pred, y_hat, y_flag):
+        if type(self.loss_sim) == torch.nn.modules.loss.CosineEmbeddingLoss:
+            return self.loss_sim(y_pred,y_hat,y_flag)
+
+        elif type(self.loss_sim) == torch.nn.modules.loss.MSELoss:
+            if y_flag == 1:
+                return self.loss_sim(y_pred,y_hat)
+            else:
+                return 1/self.loss_sim(y_pred,y_hat)
+        else:
+            raise AssertionError("Invalid loss function")
+
 def total_variation(saliency, phi):
     saliency = torch.squeeze(saliency)
     x_diff = torch.abs(saliency[1:,:] - saliency[:-1,:])
@@ -79,7 +102,6 @@ def total_variation(saliency, phi):
     return torch.mul(torch.sum(x_diff) + torch.sum(y_diff), phi)
 
 def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, sigma, opt):
-    saliency_list = []
     for i in range(epochs):
         opt.zero_grad()
         y_pred = model(x)
@@ -88,7 +110,5 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, sigma, opt):
         loss.backward(retain_graph=True)
 
         opt.step()
-
-        saliency_list.append(model.get_saliency().detach().cpu().numpy())
 
     return model.get_saliency().detach().cpu().numpy()
