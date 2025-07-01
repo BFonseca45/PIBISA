@@ -67,7 +67,7 @@ def run_main(cfg: DictConfig):
     gen_cpu = torch.Generator(device='cpu')
     gen_cpu.manual_seed(45)
 
-    dataset = ImageNet(root='C:/Users/bfons/OneDrive/Datasets/ImageNET', split='val', transform=transform)
+    dataset = ImageNet(root='/nas-ctm01/datasets/public/ImageNet/', split='val', transform=transform)
     sub_set = Subset(dataset=dataset, indices=range(0,10000))
     dataloader = DataLoader(dataset=sub_set, batch_size=1, shuffle=True, num_workers=1, generator=gen_cpu)
 
