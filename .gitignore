@@ -8,3 +8,4 @@
 /test_path
 /multirun
 /outputs
+/src//__pycache__/*
