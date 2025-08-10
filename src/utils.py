@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,9 +21,9 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, loss_mo
 
         # setting the flag for computing positive/negative relations
         if return_negative:
-            y_flag = -torch.ones(1, dtype=torch.long)
+            y_flag = -torch.ones(1, dtype=torch.long, device=device)
         else:
-            y_flag = torch.ones(1, dtype=torch.long)
+            y_flag = torch.ones(1, dtype=torch.long, device=device)
 
         # defining the bottleneck layer
         ms = int(np.ceil(x.shape[-1]/32))
@@ -121,3 +122,11 @@ def decode_imagenet(preds:torch.tensor):
         decoded_labels.append(imgnt_labels[y])
 
     return decoded_labels
+
+def unnormalize(x:torch.Tensor):
+    invTrans = torchvision.transforms.Compose([
+        torchvision.transforms.Normalize(mean=[0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
+        torchvision.transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.])
+    ])
+    x = invTrans(x)
+    return torchvision.transforms.functional.to_pil_image(torch.squeeze(x))

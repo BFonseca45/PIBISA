@@ -18,13 +18,15 @@ from src.utils import *
 from src.metrics import *
 from src.models import *
 
-@hydra.main(version_base=None, config_path='.', config_name='config.yaml')
+@hydra.main(version_base=None, config_path='./configs/', config_name='config.yaml')
 def run_main(cfg: DictConfig):
     # Passing config to variables
     beta = cfg.param.beta
     architecture = cfg.db.model
     dataset_name = cfg.db.dataset_name
 
+    print(cfg)
+    
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
