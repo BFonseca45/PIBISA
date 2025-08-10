@@ -67,7 +67,10 @@ def run_main(cfg: DictConfig):
     MoRF = []
     LeRF = []
     captions = []
-    savefile = './out/metrics/CLIP_metrics.pkl'
+    if random_mask:
+        savefile = './out/metrics/CLIP_metrics_random.pkl'
+    else:
+        savefile = './out/metrics/CLIP_metrics.pkl'
     for x, _ in tqdm(dloader):
         # Generating the caption for a given image
         x_pil = unnormalize(x)
