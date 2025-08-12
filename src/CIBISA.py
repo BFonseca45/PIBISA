@@ -65,8 +65,8 @@ class InfoLoss(nn.Module):
         self.learnable_param = learnable_param
 
         if self.learnable_param:
-            self.beta = torch.nn.Parameter(torch.tensor(0.0))
-            self.phi = torch.nn.Parameter(torch.tensor(0.0))
+            self.beta = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
+            self.phi = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
         else:
             self.beta = beta
             self.phi = phi
@@ -74,14 +74,20 @@ class InfoLoss(nn.Module):
     def forward(self, saliency_map):
         # Normalization term
         k = np.prod(saliency_map.shape)*3
-        
+
         complexity_loss = torch.sum(torch.abs(saliency_map))/k
         variation_loss = total_variation(saliency=saliency_map)/k
 
         if self.learnable_param:
+            # print('beta value', self.beta)
+            # print('phi value', self.phi)
             return torch.exp(-self.beta)*complexity_loss + self.beta + torch.exp(-self.phi)*variation_loss + self.phi
         else:
             return self.beta*complexity_loss + self.phi*variation_loss
+
+    def reset_loss(self):
+        nn.init.zeros_(self.beta)
+        nn.init.zeros_(self.phi)
 
 # Horrible function
 class SimilarityLoss(nn.Module):
@@ -91,7 +97,7 @@ class SimilarityLoss(nn.Module):
         self.mode = mode
 
         if self.learnable_param:
-            self.sigma = torch.nn.Parameter(torch.tensor(0.0))
+            self.sigma = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
         else:
             self.sigma = sigma
 
@@ -110,19 +116,22 @@ class SimilarityLoss(nn.Module):
                 return self.sigma*self.loss_sim(y_pred,y_hat,y_flag)
 
         elif self.mode == 'mse':
-            if y_flag == 1:        
+            if y_flag == 1:
                 if self.learnable_param:
                     return torch.exp(-self.sigma)*self.loss_sim(y_pred,y_hat) + self.sigma
-                else:        
+                else:
                     return self.sigma*self.loss_sim(y_pred,y_hat)
             else:
                 if self.learnable_param:
                     return torch.exp(-self.sigma)*1/self.loss_sim(y_pred,y_hat) + self.sigma
                 else:
                     return self.sigma*1/self.loss_sim(y_pred,y_hat)
-        
+
         else:
             raise AssertionError("Enter a valid mode: ['cosine_sim', 'mse']")
+
+    def reset_loss(self):
+        nn.init.zeros_(self.sigma)
 
 def total_variation(saliency):
     saliency = torch.squeeze(saliency)
@@ -140,7 +149,5 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
         loss.backward(retain_graph=True)
 
         opt.step()
-        
-        # print(loss)
 
     return model.get_saliency().detach().cpu().numpy()

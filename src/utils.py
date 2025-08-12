@@ -36,20 +36,30 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, loss_mo
 
         # losses and parameters
         P = list(new_core.parameters())
-        # optimizer = torch.optim.Adam(P, lr=1)
-        optimizer = torch.optim.Adam(P, lr=0.2)
         
         if learnable_param:
             loss_inf = InfoLoss(learnable_param=learnable_param).to(device)
-            loss_sim = SimilarityLoss(mode=loss_mode, learnable_param=learnable_param).to(device)
+            loss_sim = SimilarityLoss(mode=loss_mode, sigma=1, learnable_param=False).to(device)                        
+            
+            P.extend(list(loss_inf.parameters()))
+            P.extend(list(loss_sim.parameters()))
+            
+            optimizer = torch.optim.Adam(P, lr=1)
+            
         else:
             loss_inf = InfoLoss(beta=beta, phi=1).to(device)
             loss_sim = SimilarityLoss(mode=loss_mode, sigma=1).to(device)
-
+            optimizer = torch.optim.Adam(P, lr=1)
+            
         # computing the saliency
         final_saliency = 0
         for _ in range(n_masks):
             new_core.reset_model()
+            
+            if learnable_param:
+                loss_inf.reset_loss()
+                # loss_sim.reset_loss()
+                
             # final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=10)
             final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=20)
 
