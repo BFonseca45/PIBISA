@@ -10,7 +10,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, loss_mode='cosine_sim', return_negative:bool=False, n_masks:int=20, beta:int=10, learnable_param=False) -> np.array:
+def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='cosine_sim', return_negative:bool=False, n_masks:int=20, epochs:int=15, beta:int=10, learnable_param=False) -> np.array:
     # computing the target embedding
     with torch.enable_grad():
         if model._get_name() == 'CLIP':
@@ -36,59 +36,61 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model:torch, loss_mo
 
         # losses and parameters
         P = list(new_core.parameters())
-        
+
         if learnable_param:
             loss_inf = InfoLoss(learnable_param=learnable_param).to(device)
-            loss_sim = SimilarityLoss(mode=loss_mode, sigma=1, learnable_param=False).to(device)                        
-            
+            loss_sim = SimilarityLoss(mode=loss_mode, sigma=1, learnable_param=False).to(device)
+
             P.extend(list(loss_inf.parameters()))
             P.extend(list(loss_sim.parameters()))
-            
+
             optimizer = torch.optim.Adam(P, lr=1)
-            
+            log_param = True
+
         else:
             loss_inf = InfoLoss(beta=beta, phi=1).to(device)
             loss_sim = SimilarityLoss(mode=loss_mode, sigma=1).to(device)
             optimizer = torch.optim.Adam(P, lr=1)
-            
+
         # computing the saliency
         final_saliency = 0
+        hyperparams = []
         for _ in range(n_masks):
             new_core.reset_model()
-            
+
             if learnable_param:
                 loss_inf.reset_loss()
-                # loss_sim.reset_loss()
-                
-            # final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=10)
-            final_saliency += train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=20)
+            
+            saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs, log_param=log_param)
+            final_saliency +=  saliency
+            hyperparams.append(hps)
 
         final_saliency = np.squeeze(final_saliency)
         final_saliency = (final_saliency - np.min(final_saliency))/(np.max(final_saliency) - np.min(final_saliency))
 
-    return final_saliency
+    return final_saliency, hyperparams
 
-def compute_pairs(x1, x2, model, mode='diff', loss_mode='cosine_sim', n_masks=20,beta=10):
+def compute_pairs(x1, x2, model, mode='diff', loss_mode='cosine_sim', n_masks:int=20,beta:int=10, learnable_param=False):
     if mode == 'diff':
-        s_pos = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta)
-        s_neg = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta)
+        s_pos,_ = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta, learnable_param=learnable_param)
+        s_neg,_ = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta, learnable_param=learnable_param)
         sfinal_x1 = s_pos - s_neg
 
-        s_pos = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta)
-        s_neg = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta)
+        s_pos,_ = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, n_masks=n_masks, beta=beta, learnable_param=learnable_param)
+        s_neg,_ = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, n_masks=n_masks, beta=beta, learnable_param=learnable_param)
         sfinal_x2 = s_pos - s_neg
 
         return sfinal_x1, sfinal_x2
 
     elif mode == 'pos':
-        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, beta=beta)
-        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, beta=beta)
+        sfinal_x1,_ = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=False, beta=beta, learnable_param=learnable_param)
+        sfinal_x2,_ = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=False, beta=beta, learnable_param=learnable_param)
 
         return sfinal_x1, sfinal_x2
 
     elif mode == 'neg':
-        sfinal_x1 = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, beta=beta)
-        sfinal_x2 = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, beta=beta)
+        sfinal_x1,_ = compute_saliency(x=x1, x_target=x2, model=model, loss_mode=loss_mode, return_negative=True, beta=beta, learnable_param=learnable_param)
+        sfinal_x2,_ = compute_saliency(x=x2, x_target=x1, model=model, loss_mode=loss_mode, return_negative=True, beta=beta, learnable_param=learnable_param)
 
         return sfinal_x1, sfinal_x2
 
@@ -145,3 +147,6 @@ def unnormalize(x:torch.Tensor):
     ])
     x = invTrans(x)
     return torchvision.transforms.functional.to_pil_image(torch.squeeze(x))
+
+# def log_beta_phi():
+    
