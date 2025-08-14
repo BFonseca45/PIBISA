@@ -109,7 +109,7 @@ def run_main(cfg: DictConfig):
             ax[i+1].axis('off')
             
         fig_savefile = './out/images/saliency' + str(j) + '.png'
-        plt.savefig
+        plt.savefig(fig_savefile)
         plt.close()
         
         j=j+1
