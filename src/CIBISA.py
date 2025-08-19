@@ -69,8 +69,8 @@ class InfoLoss(nn.Module):
             self.phi = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
             self.t = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
         else:
-            self.beta = beta
-            self.phi = phi
+            self.beta = torch.tensor([beta], requires_grad=False)
+            self.phi = torch.tensor([phi], requires_grad=False)
 
     def forward(self, saliency_map):
         # Normalization term
@@ -80,12 +80,6 @@ class InfoLoss(nn.Module):
         variation_loss = total_variation(saliency=saliency_map)/k
 
         if self.learnable_param:
-            # print('beta value', self.beta)
-            # print('phi value', self.phi)
-            # print('t value', self.t)
-            # print()
-                        
-            # return torch.exp(-self.beta)*complexity_loss + torch.exp(-self.phi)*variation_loss + self.phi + self.beta
             return torch.exp(-self.beta)*complexity_loss + torch.exp(-self.phi)*variation_loss + (self.phi + self.beta)/self.t + torch.exp(-self.t)
         else:
             return self.beta*complexity_loss + self.phi*variation_loss
@@ -146,10 +140,10 @@ def total_variation(saliency):
 
     return torch.sum(x_diff) + torch.sum(y_diff)
 
-def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt, log_param=False):
+def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
     betas = []
     phis = []
-    
+
     for i in range(epochs):
         opt.zero_grad()
         y_pred = model(x)
@@ -158,18 +152,14 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt, log_para
         loss.backward(retain_graph=True)
 
         opt.step()
-        
-        if log_param:
-            betas.extend(loss_inf.beta.clone().detach().cpu().numpy())
-            phis.extend(loss_inf.phi.clone().detach().cpu().numpy())        
-    
-    if log_param:
-        betas = np.array(betas).squeeze()
-        betas = np.exp(-betas)
-        
-        phis = np.array(phis).squeeze()    
-        phis = np.exp(-phis)
 
-        return model.get_saliency().detach().cpu().numpy(), [betas, phis]
-    
-    return model.get_saliency().detach().cpu().numpy()
+        betas.extend(loss_inf.beta.clone().detach().cpu().numpy())
+        phis.extend(loss_inf.phi.clone().detach().cpu().numpy())
+
+    betas = np.array(betas).squeeze()
+    betas = np.exp(-betas)
+
+    phis = np.array(phis).squeeze()
+    phis = np.exp(-phis)
+
+    return model.get_saliency().detach().cpu().numpy(), [betas, phis]

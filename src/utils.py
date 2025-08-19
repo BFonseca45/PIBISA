@@ -47,13 +47,12 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             P.extend(list(loss_sim.parameters()))
 
             optimizer = torch.optim.Adam(P, lr=1)
-            log_param = True
 
         else:
             loss_inf = InfoLoss(beta=beta, phi=1).to(device)
             loss_sim = SimilarityLoss(mode=loss_mode, sigma=1).to(device)
             optimizer = torch.optim.Adam(P, lr=1)
-
+            
         # computing the saliency
         final_saliency = 0
         hyperparams = []
@@ -63,7 +62,7 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             if learnable_param:
                 loss_inf.reset_loss()
             
-            saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs, log_param=log_param)
+            saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs)
             final_saliency +=  saliency
             hyperparams.append(hps)
 

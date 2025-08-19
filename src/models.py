@@ -66,7 +66,7 @@ class ViT16_emb(torch.nn.Module):
             self.backbone = torchvision.models.vit_b_16(weights='DEFAULT')
             self.backbone.eval()
         elif self.weights == 'iBOT':
-            state_dict = torch.load("/nas-ctm01/homes/bfcoelho/CIBISA/pre_trained_models/checkpoint_teacher.pth")['state_dict']
+            state_dict = torch.load("/home/bfcoelho/Documents/Scripts/CIBISA/pre_trained_models/checkpoint_teacher.pth")['state_dict']
             state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
 
             self.backbone = vit_base(patch_size=16, return_all_tokens=True)
