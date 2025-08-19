@@ -12,3 +12,4 @@
 /longclip
 /*.out
 /wandb
+/*.err
