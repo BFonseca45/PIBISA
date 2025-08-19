@@ -5,6 +5,7 @@ import pickle
 import PIL.ImageOps
 import time
 import hydra
+import wandb
 
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
@@ -22,10 +23,18 @@ from src.models import *
 def run_main(cfg: DictConfig):
     # Passing config to variables
     beta = cfg.param.beta
+    learnable_param = cfg.param.learnable
     architecture = cfg.db.model
     dataset_name = cfg.db.dataset_name
 
-    print(cfg)
+    wandb_run = wandb.init(
+        project='PIBISA',
+        config={
+            "beta": beta, 
+            "architecture": architecture, 
+            "learnable_beta": learnable_param
+        },
+    )
     
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -86,7 +95,8 @@ def run_main(cfg: DictConfig):
         x = x.to(device)
 
         tic = time.time()
-        saliency_flat = compute_saliency(x=x, x_target=x, model=model, n_masks=20, beta=beta)
+        
+        saliency_flat, _ = compute_saliency(x=x, x_target=x, model=model, n_masks=20, beta=beta, return_negative=False, learnable_param=learnable_param)
         toc = time.time()
 
         times.append(toc-tic)
@@ -101,9 +111,15 @@ def run_main(cfg: DictConfig):
 
         i = i+1
         if not (i % 100):
+            morf_mean = np.nanmean(morf)
+            learf_mean = np.nanmean(lerf)
+            time_mean = np.nanmean(times)
+            
+            wandb_run.log({'MoRF': morf_mean, 'LeRF': learf_mean, 'Times':time_mean})
+            
             metrics_dict = {'MoRF': morf, 'LeRF': lerf, 'Times':times}
             out_dir = './out/metrics/'
-            savefile = out_dir + architecture + '_beta_' + str(beta) + '.pkl'
+            savefile = out_dir + architecture + '.pkl'
             open_file = open(savefile, 'wb')
             pickle.dump(metrics_dict, open_file)
             open_file.close()
