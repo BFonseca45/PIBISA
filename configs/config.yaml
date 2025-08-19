@@ -1,5 +1,6 @@
 param:
   beta: 10
+  learnable: True
 db:
   model: 'ResNET'
   dataset_name: 'ImageNET'

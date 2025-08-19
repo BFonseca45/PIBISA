@@ -15,7 +15,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.CIBISA import *
 from src.utils import *
-from src.metrics import *
+# from src.metrics import *
 from src.models import *
 
 @hydra.main(version_base=None, config_path='./configs/', config_name='config.yaml')
@@ -33,7 +33,8 @@ def run_main(cfg: DictConfig):
 
     if cfg.db.model == 'ResNET':
         architectures = ['Supervised', 'DINOv1','Barlow Twins', 'SwAV']
-
+    elif cfg.db.model == 'ViT':
+        architectures = ['Supervised', 'DINOv1','DINOv2', 'iBOT']
     model_list = []        
     for architecture in architectures:
 
@@ -41,21 +42,21 @@ def run_main(cfg: DictConfig):
             model = VGG_emb(level='full')
             model = model.to(device)
             model.eval()
-        elif architecture == 'Supervised':
+        elif architecture == 'ResNET':
             model = ResNET_emb(level='full')
             model = model.to(device)
             model.eval()
-        elif architecture == 'ViTb-16':
+        elif architecture == 'Supervised':
             model = ViT16_emb()
             model = model.to(device)
             model.eval()
-        elif architecture == 'Dino':
-            model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+        elif architecture == 'DINOv2':
+            model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_lc')
             model = model.to(device)
             model.eval()
 
         elif architecture == 'DINOv1':
-            model = torch.hub.load('facebookresearch/dino:main', 'dino_resnet50')
+            model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
             model = model.to(device)
             model.eval()
         
@@ -69,6 +70,11 @@ def run_main(cfg: DictConfig):
             model = model.to(device)
             model.eval()
 
+        elif architecture == 'iBOT':
+            model = ViT16_emb(weights='iBOT')
+            model = model.to(device)
+            model.eval()
+            
         else:
             raise NameError("Insert a valid architecture")
         
@@ -79,7 +85,7 @@ def run_main(cfg: DictConfig):
 
     dataset = ImageNet(root='/nas-ctm01/datasets/public/ImageNet/', split='val', transform=transform)
     sub_set = Subset(dataset=dataset, indices=range(0,100))
-    dataloader = DataLoader(dataset=sub_set, batch_size=1, shuffle=True, num_workers=1, generator=gen_cpu)
+    dataloader = DataLoader(dataset=dataset, batch_size=1, shuffle=True, num_workers=1, generator=gen_cpu)
 
     j = 0
     cm = 'turbo'
@@ -96,7 +102,6 @@ def run_main(cfg: DictConfig):
             saliency.append(s)
         
         f, ax = plt.subplots(1,len(saliency)+1, figsize=(16,20))
-
         
         ax[0].imshow(x_pil.resize((224,224)))
         ax[0].axis('off')
@@ -108,11 +113,15 @@ def run_main(cfg: DictConfig):
             ax[i+1].title.set_text(architecture)
             ax[i+1].axis('off')
             
-        fig_savefile = './out/images/saliency' + str(j) + '.png'
+        fig_savefile = './out/images_ViT/saliency' + str(j) + '.png'
+        plt.show()
         plt.savefig(fig_savefile)
         plt.close()
         
         j=j+1
+        
+        if j > 100:
+            break
         
 if __name__ == '__main__':
     run_main()
