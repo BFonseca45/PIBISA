@@ -65,7 +65,7 @@ def run_main(cfg: DictConfig):
         config={
             "beta": beta, 
             "server": server,
-            "random_mask": random_mask
+            "method": method
         },
     )
         
@@ -129,7 +129,7 @@ def run_main(cfg: DictConfig):
             sal = torch.sigmoid(sal)
             sal = sal.detach().cpu().numpy()
         elif method == 'PIBISA':
-            sal = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, beta=beta, return_negative=False)
+            sal,_ = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, beta=beta, return_negative=False)
         elif method == 'M2IB':
             sal = generate_plot(x_pil,target_caption,nib)
         elif method == 'NIB':
