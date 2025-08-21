@@ -14,8 +14,9 @@ else:
 
 def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='cosine_sim', return_negative:bool=False, n_masks:int=20, epochs:int=15, beta:int=10, learnable_param=False) -> np.array:
     # computing the target embedding
+    k = 3*224*224
     with torch.enable_grad():
-        if model._get_name() == 'CLIP':
+        if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel':
             assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
             y_target = x_target
         else:
@@ -49,7 +50,7 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             optimizer = torch.optim.Adam(P, lr=1)
 
         else:
-            loss_inf = InfoLoss(beta=beta, phi=1).to(device)
+            loss_inf = InfoLoss(beta=beta/k, phi=1/k).to(device)
             loss_sim = SimilarityLoss(mode=loss_mode, sigma=1).to(device)
             optimizer = torch.optim.Adam(P, lr=1)
             
@@ -189,4 +190,3 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     # type: (Tensor, float, float, float, float) -> Tensor
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 # def log_beta_phi():
-    

@@ -2,4 +2,4 @@ param:
   beta: 2
 run:
   server: True
-  random_mask: False
+  method: 'M2IB'

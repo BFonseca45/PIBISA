@@ -6,6 +6,11 @@ import numpy as np
 random.seed(32984)
 torch.manual_seed(2234)
 
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
 class InfoModel(nn.Module):
     def __init__(self, core, bottleneck):
         super(InfoModel, self).__init__()
@@ -19,6 +24,8 @@ class InfoModel(nn.Module):
         x = self.botteneck(x)
         if self.core._get_name() == 'CLIP':
             y = self.core.encode_image(x)
+        elif self.core._get_name() == 'CLIPModel':
+            y = self.core.get_image_features(x)
         else:
             y = self.core(x)
         return y
@@ -69,18 +76,18 @@ class InfoLoss(nn.Module):
             self.phi = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
             self.t = torch.nn.Parameter(torch.empty((1,1), dtype=torch.float32))
         else:
-            self.beta = torch.tensor([beta], requires_grad=False)
-            self.phi = torch.tensor([phi], requires_grad=False)
+            self.beta = torch.tensor([beta], requires_grad=False, device=device)
+            self.phi = torch.tensor([phi], requires_grad=False, device=device)
 
     def forward(self, saliency_map):
         # Normalization term
         k = np.prod(saliency_map.shape)*3
 
-        complexity_loss = torch.sum(torch.abs(saliency_map))/k
-        variation_loss = total_variation(saliency=saliency_map)/k
+        complexity_loss = torch.sum(torch.abs(saliency_map))
+        variation_loss = total_variation(saliency=saliency_map)
 
         if self.learnable_param:
-            return torch.exp(-self.beta)*complexity_loss + torch.exp(-self.phi)*variation_loss + (self.phi + self.beta)/self.t + torch.exp(-self.t)
+            return torch.exp(-self.beta)*complexity_loss/k + torch.exp(-self.phi)*variation_loss/k + (self.phi + self.beta)/self.t + torch.exp(-self.t)
         else:
             return self.beta*complexity_loss + self.phi*variation_loss
 

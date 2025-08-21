@@ -13,3 +13,6 @@
 /*.out
 /wandb
 /*.err
+/NIB
+/NIB/scripts/*.pyc
+/NIB/salicncy/*.pyc
