@@ -16,3 +16,5 @@
 /NIB
 /NIB/scripts/*.pyc
 /NIB/salicncy/*.pyc
+*.DS_Store
+src/utils/Tutorial_ImageNet_Example_All_Metrics.ipynb
