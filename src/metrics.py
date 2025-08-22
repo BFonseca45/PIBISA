@@ -1,6 +1,10 @@
 import numpy as np
 import torch
+import evaluate
+
+from transformers import AutoProcessor
 from tqdm import tqdm
+from src.utils import unnormalize
 
 if torch.cuda.is_available():
     dev = "cuda:0"
@@ -12,10 +16,14 @@ np.random.seed(10)
 
 class EvalMetric():
     def __init__(self, model, mode='logit') -> None:
-        assert mode in ['logit', 'cosine'], "Please, enter a valid mode, options ['logit', 'cosine']"
+        assert mode in ['logit', 'cosine','nle'], "Please, enter a valid mode, options ['logit', 'cosine']"
 
         self.model = model
         self.mode = mode
+        if self.mode == 'nle':
+            print("Using BLIP preprocessor")
+            self.processor = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+            self.nlp_metrics = evaluate.combine(["bleu", "meteor", "rouge"])
 
     def get_tiles(self, saliency, STEP=8):
         self.STEP = STEP
@@ -52,12 +60,25 @@ class EvalMetric():
             preds = self.model.encode_image(image)
             return torch.nn.functional.cosine_similarity(y, preds).detach().cpu().numpy()
 
+        elif self.mode == 'nle':
+            image = unnormalize(image)
+            inputs = self.processor(image, return_tensors="pt").to("cuda")
+            preds = self.model.generate(**inputs)
+            preds = self.processor.decode(preds[0], skip_special_tokens=True)
+
+            m = self.nlp_metrics.compute(predictions=[preds], references=[y])
+
+            return [m['meteor'], m['bleu'], m['rouge1'], m['rouge2'], m['rougeL']]
+
         else:
-            raise NameError("Insert a valid mode, options ['logit', 'cosine']")
+            raise NameError("Insert a valid mode, options ['logit', 'cosine', 'nle]")
 
     def compute_score(self, img, y_target, saliency, metric):
         coords, importance = self.get_tiles(saliency=saliency)
         score = []
+
+        similarity = self.compute_sim(image=img, y=y_target)
+        score.append(similarity)
 
         if metric == 'MoRF':
             mask = torch.ones_like(img, dtype=torch.float32)
@@ -82,32 +103,32 @@ class EvalMetric():
             score.append(similarity)
 
         score = np.array(score, dtype=np.float32)
-        score = (score - min(score))/(max(score) - min(score))
+        score = (score - score.min(axis=0))/(score.max(axis=0) - score.min(axis=0))
 
         x = np.linspace(start=0, stop=1, num=len(score))
-        area = np.trapz(np.squeeze(score),x)
+        area = np.trapz(np.squeeze(score),x, axis=0)
 
         return score, area
 
-    def gauss_deg(self, saliency, scale_shape):
-        imgg = self.img.detach().cpu().numpy()
+    # def gauss_deg(self, saliency, scale_shape):
+    #     imgg = self.img.detach().cpu().numpy()
 
-        similarity0 = self.compute_sim(image=self.img)
+    #     similarity0 = self.compute_sim(image=self.img)
 
-        noise = np.random.randn(1,3,scale_shape,scale_shape)*np.std(imgg) + np.mean(imgg)
+    #     noise = np.random.randn(1,3,scale_shape,scale_shape)*np.std(imgg) + np.mean(imgg)
 
-        saliency_norm = (saliency - saliency.min()) / (saliency.max() - saliency.min())
-        saliency_norm = np.stack((saliency_norm, saliency_norm, saliency_norm))
-        saliency_norm = saliency_norm[None,...]
+    #     saliency_norm = (saliency - saliency.min()) / (saliency.max() - saliency.min())
+    #     saliency_norm = np.stack((saliency_norm, saliency_norm, saliency_norm))
+    #     saliency_norm = saliency_norm[None,...]
 
-        img_in = saliency_norm*imgg + (1 - saliency_norm)*noise
-        img_in = torch.Tensor(img_in)
-        img_in = img_in.to(device)
+    #     img_in = saliency_norm*imgg + (1 - saliency_norm)*noise
+    #     img_in = torch.Tensor(img_in)
+    #     img_in = img_in.to(device)
 
-        similarity = self.compute_sim(image=img_in)
-        ratio = (similarity + 1e-6)/(similarity0 + 4e-6)
+    #     similarity = self.compute_sim(image=img_in)
+    #     ratio = (similarity + 1e-6)/(similarity0 + 4e-6)
 
-        return img_in, np.clip(ratio, 0, 1)
+    #     return img_in, np.clip(ratio, 0, 1)
 
     def pointing_game(self, box_coord, saliency):
         ind = np.unravel_index(np.argmax(saliency), saliency.shape)
