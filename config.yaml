@@ -1,0 +1,5 @@
+param:
+  beta: 10
+db:
+  model: 'ResNET'
+  dataset_name: 'ImageNET'
