@@ -17,6 +17,8 @@ class Flickr8kDataset(Dataset):
     Flickr8kDataset class based on: https://docs.pytorch.org/vision/main/_modules/torchvision/datasets/flickr.html#Flickr8k
 
     Data from: https://www.kaggle.com/datasets/adityajn105/flickr8k/data
+
+    Official release: https://hockenmaier.cs.illinois.edu/8k-pictures.html
     """
 
 
