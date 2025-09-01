@@ -1,47 +1,94 @@
 # Imports
 import os
+import numpy as np
 import pandas as pd
 import urllib.request
 from PIL import Image
 
 # PyTorch Imports
-# from torchvision.datasets import Flickr8k
 from torch.utils.data import Dataset
 
 
 
 # Function: Build Flickr8k Dataset using Torchvision
-# def build_flickr8k(
-#         root='/nas-ctm01/datasets/public/Flickr8k/Images',
-#         ann_file='/nas-ctm01/datasets/public/Flickr8k/captions.txt',
-#         transform=None,
-#         target_transform=None,
-# ):
-#     """
+class Flickr8kDataset(Dataset):
+
+    """
+    Flickr8kDataset class based on: https://docs.pytorch.org/vision/main/_modules/torchvision/datasets/flickr.html#Flickr8k
+
+    Data from: https://www.kaggle.com/datasets/adityajn105/flickr8k/data
+    """
+
+
+    def __init__(self, root='/nas-ctm01/datasets/public/Flickr8k', transform=None) -> None:
+
+        self.root = root
+        self.images_dir = os.path.join(root, "Images")
+        annotations_txt = os.path.join(root, "captions.txt")
+        annotations_df = pd.read_csv(annotations_txt, header=0)
+        self.image_ids_dict, self.annotations_dict = self.annotations_to_dict(annotations_df=annotations_df)
+        self.image_ids = list(self.image_ids_dict.keys())
+        self.transform = transform
+
+        return
     
-#     Build and return the Flickr8k dataset using torchvision.
-#     See https://docs.pytorch.org/vision/main/generated/torchvision.datasets.Flickr8k.html for more details.
-
-#     Args:
-#         root (str): Root directory of the dataset where images are stored.
-#         ann_file (str): Path to the annotation file containing image captions.
-#         transform (callable, optional): A function/transform that takes in an image
-#             and returns a transformed version. E.g, `transforms.RandomCrop`
-#         target_transform (callable, optional): A function/transform that takes in the
-#             target and transforms it. E.g, `transforms.Lambda`
-#     Returns:
-#         dataset (Flickr8k): The constructed Flickr8k dataset.
-
-#     """
     
-#     dataset = Flickr8k(
-#         root=root,
-#         ann_file=ann_file,
-#         transform=transform,
-#         target_transform=target_transform
-#     )
+    # Method: Get a dictionary of annotations
+    def annotations_to_dict(self, annotations_df):
+        image_ids_dict = dict()
+        annotations_dict = dict()
 
-#     return dataset
+        # Get unique images
+        images_unique = np.unique(annotations_df['image'].values)
+        for image_id, image in enumerate(images_unique):
+            image_ids_dict[image_id] = image
+            annotations_dict[image] = list()
+        
+        # Populate dictionary
+        for _, row in annotations_df.iterrows():
+            image = row['image']
+            caption = row['caption']
+            annotations_dict[image].append(caption)
+
+        return image_ids_dict, annotations_dict
+
+
+    # Method: __getitem__
+    def __getitem__(self, idx: int):
+        """
+        Args:
+            idx (int): Index
+
+        Returns:
+            dict: Dict(image, target). target is a list of captions for the image.
+        """
+
+        # Get image ID
+        img_id = self.image_ids[idx]
+        image_fname = self.image_ids_dict[img_id]
+
+        # Image
+        image = Image.open(os.path.join(self.images_dir, image_fname)).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+
+        # Captions
+        captions = self.annotations_dict[image_fname]
+
+        # Output dict
+        output = {
+            'image_id':img_id,
+            'image_fname':image_fname,
+            'image':image,
+            'captions':captions
+        }
+
+        return output
+
+
+    # Method: __len__
+    def __len__(self) -> int:
+        return len(self.image_ids)
 
 
 
@@ -195,10 +242,3 @@ class GoogleAIConceptualCations(Dataset):
         }
 
         return data_dict
-    
-
-
-if __name__ == "__main__":
-
-    gcc = GoogleAIConceptualCations(split='train')
-    gcc = GoogleAIConceptualCations(split='val')
