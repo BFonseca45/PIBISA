@@ -1,30 +1,50 @@
+# Imports
 import os
-import torch
-import numpy as np
 import sys
-import copy
-from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseInConfidence
-from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
-sys.path.append(os.getcwd())
-from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-import torch
 import numpy as np
+import copy
 from typing import List, Callable
 
+# PyTorch and PyTorch Grad-Cam
+import torch
+from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseInConfidence
+from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
 
-def multiply_tensor_with_cam(input_tensor: torch.Tensor,
-                             cam: torch.Tensor):
-    """ Multiply an input tensor (after normalization)
-        with a pixel attribution map
+# Project Imports
+from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
+
+
+
+# TODO: Do we really need this?
+# sys.path.append(os.getcwd())
+
+# Environment Variables
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
+
+
+
+# Function: Multiply an input tensor (after normalization) with a pixel attribution map
+def multiply_tensor_with_cam(input_tensor: torch.Tensor, cam: torch.Tensor):
+    """ 
+    Multiply an input tensor (after normalization) with a pixel attribution map
     """
     return input_tensor * cam
 
+
+
+# Class: Perturbation confidence
 class PerturbationConfidenceMetric:
+
+    # Method: __init__
     def __init__(self, perturbation):
         self.perturbation = perturbation
 
+        return
+
+
+    # Method: __call__
     def __call__(self, input_tensor: torch.Tensor,
                  cams: np.ndarray,
                  targets: List[Callable],
@@ -66,12 +86,15 @@ class PerturbationConfidenceMetric:
             return result
 
 
+
+# Class: Multiply CAM by Image to understand change in confidence
 class CamMultImageConfidenceChange(PerturbationConfidenceMetric):
     def __init__(self):
-        super(CamMultImageConfidenceChange,
-              self).__init__(multiply_tensor_with_cam)
+        super(CamMultImageConfidenceChange, self).__init__(multiply_tensor_with_cam)
 
 
+
+# Class: Drop in confidence
 class DropInConfidenceText(CamMultImageConfidenceChange):
     def __init__(self):
         super(DropInConfidenceText, self).__init__()
@@ -82,6 +105,8 @@ class DropInConfidenceText(CamMultImageConfidenceChange):
         return np.maximum(scores, 0)
 
 
+
+# Class: Increase in confidence
 class IncreaseInConfidenceText(CamMultImageConfidenceChange):
     def __init__(self):
         super(IncreaseInConfidenceText, self).__init__()
@@ -92,12 +117,14 @@ class IncreaseInConfidenceText(CamMultImageConfidenceChange):
 
 
 
-
+# Function: Get metrics
 def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, model):
     results = {}
+    
     with torch.no_grad():
         vtargets = [CosSimilarity(text_feature)]
         ttargets = [CosSimilarity(image_feature)]
+        
         # Remove start and end token
         text_id = text_id[:,1:-1]
         tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
@@ -110,11 +137,15 @@ def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, m
         results['vincr'] = IncreaseInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
         results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
         results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+    
     return results
 
 
-def metric_evaluation(model,image_feats,image_features,text_ids,text_features,saliency_v,saliency_t):
+
+# Function: Compute metrics for all data
+def metric_evaluation(model, device, image_feats, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
+    
     for image_feat,image_feature,text_id,text_feature,vmap,tmap in zip(image_feats,image_features,text_ids,text_features,saliency_v,saliency_t):
         image_feat = image_feat.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)
@@ -122,4 +153,5 @@ def metric_evaluation(model,image_feats,image_features,text_ids,text_features,sa
         vmap = np.expand_dims(vmap, axis=0)
         results = get_metrics_vt(image_feat,image_feature,text_id,text_feature,vmap,tmap,model)
         all_results.append(results)
+    
     return all_results
