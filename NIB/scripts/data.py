@@ -117,17 +117,17 @@ class GoogleAIConceptualCations(Dataset):
         self.root = root
 
         # Open Image Labels TSV
-        image_labels_cols_names = [
-              'image_caption',
-              'image_url',
-              'image_labels',
-              'image_mids',
-              'image_cscores'
-        ]
-        image_train_labels = pd.read_csv(os.path.join(root, "Image_Labels_Subset_Train_GCC-Labels-training.tsv"), sep='\t', header=None, names=image_labels_cols_names)
-        if not os.path.exists(os.path.join(root, 'image_train_labels_gcc_complete.tsv')):
-            self.download_image_labels_data(image_labels_df=image_train_labels)
-        train_labels_images = pd.read_csv(os.path.join(root, 'image_train_labels_gcc_complete.tsv'), sep='\t')
+        # image_labels_cols_names = [
+        #       'image_caption',
+        #       'image_url',
+        #       'image_labels',
+        #       'image_mids',
+        #       'image_cscores'
+        # ]
+        # image_train_labels = pd.read_csv(os.path.join(root, "Image_Labels_Subset_Train_GCC-Labels-training.tsv"), sep='\t', header=None, names=image_labels_cols_names)
+        # if not os.path.exists(os.path.join(root, 'image_train_labels_gcc_complete.tsv')):
+        #     self.download_image_labels_data(image_labels_df=image_train_labels)
+        # train_labels_images = pd.read_csv(os.path.join(root, 'image_train_labels_gcc_complete.tsv'), sep='\t')
 
         
         # Open Train/Validation TSV
