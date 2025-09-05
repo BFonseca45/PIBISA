@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import urllib.request
 from PIL import Image
+from tqdm import tqdm
 
 # PyTorch Imports
 from torch.utils.data import Dataset
@@ -22,7 +23,9 @@ class Flickr8kDataset(Dataset):
     """
 
 
-    def __init__(self, root='/nas-ctm01/datasets/public/Flickr8k', transform=None) -> None:
+    def __init__(self, root='/nas-ctm01/datasets/public/Flickr8k', image_preprocessor=None, transform=None) -> None:
+
+        assert image_preprocessor is not None, 'Please provide an image_preprocessor function'
 
         self.root = root
         self.images_dir = os.path.join(root, "Images")
@@ -30,6 +33,7 @@ class Flickr8kDataset(Dataset):
         annotations_df = pd.read_csv(annotations_txt, header=0)
         self.image_ids_dict, self.annotations_dict = self.annotations_to_dict(annotations_df=annotations_df)
         self.image_ids = list(self.image_ids_dict.keys())
+        self.image_preprocessor = image_preprocessor
         self.transform = transform
 
         return
@@ -66,22 +70,24 @@ class Flickr8kDataset(Dataset):
         """
 
         # Get image ID
-        img_id = self.image_ids[idx]
-        image_fname = self.image_ids_dict[img_id]
+        image_id = self.image_ids[idx]
+        image_fname = self.image_ids_dict[image_id]
 
         # Image
         image = Image.open(os.path.join(self.images_dir, image_fname)).convert('RGB')
         if self.transform:
             image = self.transform(image)
+        image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values']
 
         # Captions
         captions = self.annotations_dict[image_fname]
 
         # Output dict
         output = {
-            'image_id':img_id,
+            'image_id':image_id,
             'image_fname':image_fname,
             'image':image,
+            "image_features":image_features,
             'captions':captions
         }
 
@@ -152,7 +158,7 @@ class GoogleAIConceptualCations(Dataset):
         # Convert DataDrame to dictionary
         labels_dict = image_labels_df.to_dict(orient='list')
         image_fname = ['' for i in range(len(image_labels_df))]
-        for idx in range(len(image_labels_df)):
+        for idx in tqdm(range(len(image_labels_df))):
             caption = labels_dict['image_caption'][idx]
             url = labels_dict['image_url'][idx]
             labels = labels_dict['image_labels'][idx]
@@ -193,7 +199,7 @@ class GoogleAIConceptualCations(Dataset):
         # Convert DataFrame to dictionary
         captions_dict = captions_df.to_dict(orient='list')
         image_fname = ['' for i in range(len(captions_df))]
-        for idx in range(len(captions_df)):
+        for idx in tqdm(range(len(captions_df))):
             caption = captions_dict['image_caption'][idx]
             url = captions_dict['image_url'][idx]
             try:
