@@ -78,9 +78,12 @@ class Flickr8kDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values']
+        print(image.shape)
+        print(image_features.shape)
 
         # Captions
         captions = self.annotations_dict[image_fname]
+        print(captions.shape)
 
         # Output dict
         output = {
