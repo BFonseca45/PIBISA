@@ -1,6 +1,5 @@
 # Imports
 import os
-import warnings
 import random
 import numpy as np
 from tqdm import tqdm
@@ -21,10 +20,6 @@ from scripts.methods import vision_heatmap_iba, text_heatmap_iba
 from saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
 
-
-# Additional Stuff
-# Ignore Warnings
-warnings.filterwarnings('ignore')
 
 # Setup environment variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -73,8 +68,8 @@ if __name__ == "__main__":
     argparser.add_argument("--beta", type=float, default=0.1)
     argparser.add_argument("--num_steps", type=int, default=10)
     argparser.add_argument("--target_layer", type=int, default=9)
-    argparser.add_argument("--batch_size", type=int, default=32, help="Batch size for experiments.")
-    argparser.add_argument("--num_workers", type=int, default=8, help="Number of workers.")
+    argparser.add_argument("--batch_size", type=int, default=1, help="Batch size for experiments.")
+    argparser.add_argument("--num_workers", type=int, default=0, help="Number of workers.")
     argparser.add_argument("--seed", type=int, default=0, help="Seed for the sake of reproducibility.")
     args = argparser.parse_args()
 
