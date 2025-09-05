@@ -109,6 +109,9 @@ if __name__ == "__main__":
         pass
 
     elif args.dataset == "Flickr8kDataset":
+
+        # TODO: Review collate function
+        # TODO: Review shape of list of captions
         transform = Compose([
             CenterCrop((224, 224)),
             ToImage(),
