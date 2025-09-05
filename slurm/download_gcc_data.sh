@@ -5,4 +5,4 @@
 #SBATCH -o download_gcc_data.out             # STDOUT
 #SBATCH -e download_gcc_data.err             # STDERR
 
-python NIB/generate_attributions --dataset GoogleAIConceptualCations
+python NIB/generate_attributions.py --dataset GoogleAIConceptualCations
