@@ -77,7 +77,9 @@ class Flickr8kDataset(Dataset):
         image = Image.open(os.path.join(self.images_dir, image_fname)).convert('RGB')
         if self.transform:
             image = self.transform(image)
-        image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values']
+
+        # Image features (remove batch size)
+        image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
         print(image.shape)
         print(image_features.shape)
 
