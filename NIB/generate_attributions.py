@@ -8,6 +8,7 @@ from tqdm import tqdm
 # PyTorch Imports
 import torch
 from torch.utils.data import DataLoader
+from torchvision.transforms.v2 import Compose, ToImage
 
 # Transformers Imports
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
@@ -112,7 +113,10 @@ if __name__ == "__main__":
         pass
 
     elif args.dataset == "Flickr8kDataset":
-        dataset = Flickr8kDataset(image_preprocessor=processor)
+        transform = Compose([
+            ToImage()
+        ])
+        dataset = Flickr8kDataset(image_preprocessor=processor, transform=transform)
         
 
     # Create dataloader
