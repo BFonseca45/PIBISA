@@ -83,7 +83,7 @@ class Flickr8kDataset(Dataset):
 
         # Captions
         captions = self.annotations_dict[image_fname]
-        print(captions.shape)
+        print(np.shape(captions))
 
         # Output dict
         output = {
