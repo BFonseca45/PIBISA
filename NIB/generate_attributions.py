@@ -7,7 +7,7 @@ from tqdm import tqdm
 # PyTorch Imports
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms.v2 import Compose, ToImage
+from torchvision.transforms.v2 import Compose, ToImage, Resize
 
 # Transformers Imports
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
@@ -88,6 +88,7 @@ if __name__ == "__main__":
     # Get model, processor, and tokenizer
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    print(processor)
     tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
 
     # Get evaluation method
@@ -109,7 +110,8 @@ if __name__ == "__main__":
 
     elif args.dataset == "Flickr8kDataset":
         transform = Compose([
-            ToImage()
+            ToImage(),
+            Resize(224)
         ])
         dataset = Flickr8kDataset(image_preprocessor=processor, transform=transform)
         
