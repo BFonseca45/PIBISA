@@ -108,9 +108,6 @@ if __name__ == "__main__":
         pass
 
     elif args.dataset == "Flickr8kDataset":
-
-        # TODO: Review collate function
-        # TODO: Review shape of list of captions
         transform = Compose([
             ToImage(),
         ])
@@ -124,7 +121,8 @@ if __name__ == "__main__":
         shuffle=False, 
         num_workers=num_workers, 
         collate_fn=dataset.collate_fn, 
-        pin_memory=True)
+        pin_memory=True
+    )
 
 
 
@@ -141,11 +139,13 @@ if __name__ == "__main__":
         x = batch['image']
         caption = batch['captions']
         batch_xs = batch['image_features']
-        for i in range(len(x)):
-            print(x[i].shape)
-            print(np.shape(caption[i]))
-            print(batch_xs[i].shape)
-        exit()
+
+        # TODO: Debugging stuff; will erase after testing
+        # for i in range(len(x)):
+        #     print(x[i].shape)
+        #     print(np.shape(caption[i]))
+        #     print(batch_xs[i].shape)
+        # exit()
 
         # Special Case: Flickr8kDataset has several captions for the same image
         if isinstance(dataloader.dataset, Flickr8kDataset):
