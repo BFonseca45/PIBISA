@@ -80,22 +80,24 @@ class Flickr8kDataset(Dataset):
 
         # Image features (remove batch size)
         image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
-        print(image.shape)
-        print(image_features.shape)
 
         # Captions
         captions = self.annotations_dict[image_fname]
-        print(np.shape(captions))
 
-        # Output dict
+        return image_id, image_fname, image, image_features, captions
+    
+
+    # Method: Collate function
+    def collate_fn(self, batch):
+
         output = {
-            'image_id':image_id,
-            'image_fname':image_fname,
-            'image':image,
-            "image_features":image_features,
-            'captions':captions
+            "image_id":[i[0] for i in batch],
+            "image_fname":[i[1] for i in batch],
+            "image":[i[2] for i in batch],
+            "image_features":[i[3] for i in batch],
+            "captions":[i[4] for i in batch]
         }
-
+        
         return output
 
 

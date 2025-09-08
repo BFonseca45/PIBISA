@@ -137,7 +137,11 @@ if __name__ == "__main__":
         x = batch['image']
         caption = batch['captions']
         batch_xs = batch['image_features']
-        print(x.shape, np.shape(caption), batch_xs.shape)
+        for i in len(batch):
+            print(x[i].shape)
+            print(caption[i].shape)
+            print(batch_xs[i].shape)
+        exit()
 
         # Special Case: Flickr8kDataset has several captions for the same image
         if isinstance(dataloader.dataset, Flickr8kDataset):
