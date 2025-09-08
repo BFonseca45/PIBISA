@@ -95,8 +95,8 @@ if __name__ == "__main__":
 
     # Create dataset
     if args.dataset == "GoogleAIConceptualCations":
-        dataset = GoogleAIConceptualCations(split='train')
-        dataset = GoogleAIConceptualCations(split='val')
+        dataset = GoogleAIConceptualCations(root='/Users/tiagofilipesousagoncalves/Downloads/GoogleAI-ConceptualCaptions', split='train')
+        dataset = GoogleAIConceptualCations(root='/Users/tiagofilipesousagoncalves/Downloads/GoogleAI-ConceptualCaptions', split='val')
         print("GoogleAIConceptualCations download finished.")
         exit()
 

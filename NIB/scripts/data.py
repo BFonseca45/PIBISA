@@ -178,7 +178,8 @@ class GoogleAIConceptualCations(Dataset):
                     url=url, 
                     filename=os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')
                 )
-                Image.open(os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')).convert('RGB')
+                image = Image.open(os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')).convert('RGB')
+                image.verify()
                 image_fname[idx] = os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')
             except:
                 image_fname[idx] = None
@@ -216,7 +217,8 @@ class GoogleAIConceptualCations(Dataset):
                     url=url, 
                     filename=os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')
                 )
-                Image.open(os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')).convert('RGB')
+                image = Image.open(os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')).convert('RGB')
+                image.verify()
                 image_fname[idx] = os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')
             except:
                 image_fname[idx] = None
