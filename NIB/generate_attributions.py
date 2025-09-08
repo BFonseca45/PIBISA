@@ -113,14 +113,19 @@ if __name__ == "__main__":
         # TODO: Review collate function
         # TODO: Review shape of list of captions
         transform = Compose([
-            CenterCrop((224, 224)),
             ToImage(),
         ])
         dataset = Flickr8kDataset(image_preprocessor=processor, transform=transform)
         
 
     # Create dataloader
-    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dataloader = DataLoader(
+        dataset=dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=num_workers, 
+        collate_fn=dataset.collate_fn, 
+        pin_memory=True)
 
 
 
