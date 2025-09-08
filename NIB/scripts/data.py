@@ -7,6 +7,7 @@ from PIL import Image
 from tqdm import tqdm
 
 # PyTorch Imports
+import torch
 from torch.utils.data import Dataset
 
 
@@ -94,7 +95,7 @@ class Flickr8kDataset(Dataset):
             "image_id":[i[0] for i in batch],
             "image_fname":[i[1] for i in batch],
             "image":[i[2] for i in batch],
-            "image_features":[i[3] for i in batch],
+            "image_features":torch.tensor([i[3] for i in batch]),
             "captions":[i[4] for i in batch]
         }
         
