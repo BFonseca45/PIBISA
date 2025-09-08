@@ -141,10 +141,9 @@ if __name__ == "__main__":
         x = batch['image']
         caption = batch['captions']
         batch_xs = batch['image_features']
-        print(len(x))
         for i in range(len(x)):
             print(x[i].shape)
-            print(caption[i].shape)
+            print(np.shape(caption[i]))
             print(batch_xs[i].shape)
         exit()
 
