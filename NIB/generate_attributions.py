@@ -138,7 +138,7 @@ if __name__ == "__main__":
     for batch_idx, batch in tqdm(enumerate(dataloader)):
         x = batch['image']
         caption = batch['captions']
-        batch_xs = batch['image_features']
+        batch_xs = batch['image_processed']
 
         # TODO: Debugging stuff; will erase after testing
         # for i in range(len(x)):

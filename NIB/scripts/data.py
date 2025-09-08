@@ -79,13 +79,13 @@ class Flickr8kDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        # Image features (remove batch size)
-        image_features = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
+        # Image processed (remove batch size)
+        image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
 
         # Captions
         captions = self.annotations_dict[image_fname]
 
-        return image_id, image_fname, image, image_features, captions
+        return image_id, image_fname, image, image_processed, captions
     
 
     # Method: Collate function
@@ -95,7 +95,7 @@ class Flickr8kDataset(Dataset):
             "image_id":[i[0] for i in batch],
             "image_fname":[i[1] for i in batch],
             "image":[i[2] for i in batch],
-            "image_features":torch.tensor([i[3] for i in batch]),
+            "image_processed":torch.stack([i[3] for i in batch], dim=0),
             "captions":[i[4] for i in batch]
         }
         
