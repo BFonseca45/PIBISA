@@ -7,13 +7,13 @@ from tqdm import tqdm
 # PyTorch Imports
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms.v2 import Compose, ToImage, Resize, CenterCrop
+from torchvision.transforms.v2 import Compose, ToImage
 
 # Transformers Imports
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
-from scripts.data import Flickr8kDataset, GoogleAIConceptualCations
+from scripts.data import Flickr8kDataset
 # from datasets import ConceptualCaptions, collate_fn_cc, ImagenetDataset, collect_fn_imagenet
 from scripts.eval import metric_evaluation
 from scripts.methods import vision_heatmap_iba, text_heatmap_iba
@@ -23,6 +23,20 @@ from saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, n
 
 # Setup environment variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
+
+# Dictionary for the saliency methods
+SALIENCY_METHODS = {
+    "chefer":chefer, 
+    "gradcam":gradcam, 
+    "saliencymap":saliencymap, 
+    "fast_ig":fast_ig, 
+    "mfaba":mfaba, 
+    "rise":rise, 
+    "m2ib":m2ib, 
+    "nib":nib
+}
 
 
 
@@ -91,14 +105,11 @@ if __name__ == "__main__":
     tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
 
     # Get evaluation method
-    method = eval(args.method)
+    method = SALIENCY_METHODS[args.method]
 
     # Create dataset
     if args.dataset == "GoogleAIConceptualCations":
-        dataset = GoogleAIConceptualCations(root='/Users/tiagofilipesousagoncalves/Downloads/GoogleAI-ConceptualCaptions', split='train')
-        dataset = GoogleAIConceptualCations(root='/Users/tiagofilipesousagoncalves/Downloads/GoogleAI-ConceptualCaptions', split='val')
-        print("GoogleAIConceptualCations download finished.")
-        exit()
+        pass
 
     elif args.dataset == "imagenet":
         
@@ -175,8 +186,7 @@ if __name__ == "__main__":
         elif args.method in ['m2ib']:
             v_saliency, t_saliency = m2ib(model, tid, batch_xs, args.beta)
         elif args.method in ['nib']:
-            v_saliency, t_saliency = nib(
-                model, tid, batch_xs, args.num_steps, args.target_layer)
+            v_saliency, t_saliency = nib(model, tid, batch_xs, args.num_steps, args.target_layer)
         else:
             v_saliency, t_saliency = method(model, tid, batch_xs)
         
