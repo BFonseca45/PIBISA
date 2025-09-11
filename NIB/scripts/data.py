@@ -252,3 +252,16 @@ class MSCXRDataset(Dataset):
         captions = self.label_text[idx]
 
         return image_fname, image, image_processed, captions
+
+
+    # Method: Collate function
+    def collate_fn(self, batch):
+
+        output = {
+            "image_fname":[i[0] for i in batch],
+            "image":[i[1] for i in batch],
+            "image_processed":torch.stack([i[2] for i in batch], dim=0),
+            "captions":[i[3] for i in batch]
+        }
+        
+        return output
