@@ -17,7 +17,7 @@ from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 from omegaconf import DictConfig, OmegaConf
 
 from NIB.scripts.plot import visualize_vandt_heatmap
-from NIB.salicncy import chefer,fast_ig,gradcam,m2ib,mfaba,nib,rise,saliencymap
+from NIB.saliency import chefer,fast_ig,gradcam,m2ib,mfaba,nib,rise,saliencymap
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
