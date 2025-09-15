@@ -1,7 +1,7 @@
 from scripts.methods import vision_heatmap_iba,text_heatmap_iba
 import numpy as np
 
-def m2ib(model,text_ids,image_feat,beta=0.1):
+def m2ib(model, text_ids, image_feat, beta=0.1):
     saliency_v = []
     saliency_t = []
     for idx in range(image_feat.shape[0]):

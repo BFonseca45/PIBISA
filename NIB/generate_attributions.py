@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
+    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset", "ImageNetDataset"])
     argparser.add_argument("--method", type=str, default="nib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib"])
     argparser.add_argument("--beta", type=float, default=0.1)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -111,11 +111,7 @@ if __name__ == "__main__":
     if args.dataset == "GoogleAIConceptualCations":
         pass
 
-    elif args.dataset == "imagenet":
-        
-        # TODO
-        # dataset = ImagenetDataset("datasets/tiny-imagenet-200", image_preprocessor=processor, split='val')
-        # collate_fn = collect_fn_imagenet
+    elif args.dataset == "ImageNetDataset":
         pass
 
     elif args.dataset == "Flickr8kDataset":
@@ -155,65 +151,84 @@ if __name__ == "__main__":
     # Initialize lists to store results
     image_saliency = list()
     text_saliency = list()
-    image_feats = list()
+    images_processed = list()
     text_features = list()
     image_features = list()
     text_ids = list()
 
     # Go through the data
     for batch_idx, batch in tqdm(enumerate(dataloader)):
-        x = batch['image']
-        caption = batch['captions']
-        batch_xs = batch['image_processed']
-
-        # TODO: Debugging stuff; will erase after testing
-        # for i in range(len(x)):
-        #     print(x[i].shape)
-        #     print(np.shape(caption[i]))
-        #     print(batch_xs[i].shape)
-        # exit()
+        image = batch['image']
+        captions = batch['captions']
+        image_processed = batch['image_processed']
 
         # Special Case: Flickr8kDataset has several captions for the same image
         if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
-                for cp in caption:
+                for cp in captions:
                     tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
                     tf = [model.get_text_features(t) for t in tids]
                     tf = torch.cat(tf, dim=0)
-                    im_features = model.get_image_features(batch_xs.to(device))[0]
+                    im_features = model.get_image_features(image_processed.to(device))[0]
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
                     new_caption.append(cp[prob.argmax().item()])
-                caption = new_caption
+                captions = new_caption
 
 
         # TODO: Review some of these dimensions
-        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(device) for cp in caption]
+        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(device) for cp in captions]
         tf = [model.get_text_features(t) for t in tid]
         tf = torch.cat(tf, dim=0)
-        batch_xs = batch_xs.to(device)
-        im_f = model.get_image_features(batch_xs).detach().cpu()
+        image_processed = image_processed.to(device)
+        im_f = model.get_image_features(image_processed).detach().cpu()
 
         if args.method in ['chefer', 'gradcam', 'saliencymap', 'fast_ig', 'mfaba']:
-            v_saliency, t_saliency = method(model, processor, caption, x)
+            v_saliency, t_saliency = method(
+                model=model, 
+                processor=processor, 
+                captions=captions, 
+                image_feat=image
+            )
+
         elif args.method in ['rise']:
-            v_saliency, t_saliency = rise(model, batch_xs, tid, im_f, tf)
+            v_saliency, t_saliency = rise(
+                model=model, 
+                image_feat=image_processed, 
+                tids=tid, 
+                image_features=im_f, 
+                text_features=tf
+            )
+
         elif args.method in ['m2ib']:
-            v_saliency, t_saliency = m2ib(model, tid, batch_xs, args.beta)
+            v_saliency, t_saliency = m2ib(
+                model=model, 
+                text_ids=tid, 
+                image_feat=image_processed, 
+                beta=args.beta
+            )
+
         elif args.method in ['nib']:
-            v_saliency, t_saliency = nib(model, tid, batch_xs, args.num_steps, args.target_layer)
+            v_saliency, t_saliency = nib(
+                model=model, 
+                text_ids=tid, 
+                image_feats=image_processed, 
+                num_steps=args.num_steps, 
+                target_layer=args.target_layer
+            )
+
         else:
-            v_saliency, t_saliency = method(model, tid, batch_xs)
+            v_saliency, t_saliency = method(model, tid, image_processed)
         
         image_saliency.append(v_saliency)
         text_saliency.extend(t_saliency)
         text_features.extend(tf.detach().cpu())
-        image_feats.append(batch_xs.cpu())
+        images_processed.append(image_processed.cpu())
         image_features.append(im_f)
         text_ids.extend(tid)
 
 
-    image_feats = torch.cat(image_feats, dim=0)
+    images_processed = torch.cat(images_processed, dim=0)
     image_features = torch.cat(image_features, dim=0)
     text_features = torch.stack(text_features, dim=0)
     image_saliency = np.concatenate(image_saliency, axis=0)
@@ -223,7 +238,7 @@ if __name__ == "__main__":
     res = metric_evaluation(
         model=model, 
         device=device, 
-        image_feats=image_feats, 
+        images_processed=images_processed, 
         image_features=image_features,
         text_ids=text_ids,
         text_features=text_features, 
