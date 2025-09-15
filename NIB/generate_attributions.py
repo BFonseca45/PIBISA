@@ -137,7 +137,7 @@ if __name__ == "__main__":
             image_preprocessor=processor,
             transform=Compose([ToImage()])
         )
-        print(dataset.images)
+        print(dataset.image_to_annotations)
         print(dataset.annotations)
         exit()
 

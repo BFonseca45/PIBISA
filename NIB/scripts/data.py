@@ -304,6 +304,7 @@ class MSCocoDataset(Dataset):
         self.image_to_annotations = coco_.imgToAnns
         self.categories_to_images = coco_.catToImgs
         self.images = coco_.imgs
+        self.images_ids = list(self.images.keys())
         self.annotations = coco_.anns
         self.categories = coco_.cats
         self.image_folder = image_folder
@@ -315,7 +316,7 @@ class MSCocoDataset(Dataset):
 
     # Method: __len__
     def __len__(self):
-        return len(self.images)
+        return len(self.images_ids)
     
 
     # Method: __getitem__
@@ -329,16 +330,17 @@ class MSCocoDataset(Dataset):
             dict: Dict(image, target). target is a list of captions for the image.
         """
 
-        # Get image path
-        # image_fname = self.path[idx]
+        # Get image ID and image filename
+        image_id = self.images_ids[idx]
+        image_fname = self.images[image_id]['file_name']
 
         # Image
-        # image = Image.open(os.path.join(self.mimicxr_root, image_fname)).convert('RGB')
-        # if self.transform:
-        #     image = self.transform(image)
+        image = Image.open(os.path.join(self.image_folder, image_fname)).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
 
         # Image processed (remove batch size)
-        # image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
+        image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
 
         # Captions
         # captions = self.label_text[idx]
