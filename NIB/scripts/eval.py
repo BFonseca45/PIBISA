@@ -10,15 +10,10 @@ from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseIn
 from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
 
 # Project Imports
-from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
-
-
+from NIB.scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
 
 # Environment Variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-
-
 
 
 # Function: Multiply an input tensor (after normalization) with a pixel attribution map
@@ -119,20 +114,20 @@ def get_metrics_vt(image_feat, image_feature, text_id, text_feature, vmap, tmap,
     
     with torch.no_grad():
         vtargets = [CosSimilarity(text_feature)]
-        ttargets = [CosSimilarity(image_feature)]
+        # ttargets = [CosSimilarity(image_feature)]
         
-        # Remove start and end token
-        text_id = text_id[:,1:-1]
-        tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
-        model_clone = copy.deepcopy(model)
-        temp = np.ones_like(tmap).astype(int)
-        for idx,i in enumerate(text_id[0]):
-            i = i.item()
-            model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
+        # # Remove start and end token
+        # text_id = text_id[:,1:-1]
+        # tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
+        # model_clone = copy.deepcopy(model)
+        # temp = np.ones_like(tmap).astype(int)
+        # for idx,i in enumerate(text_id[0]):
+        #     i = i.item()
+        #     model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
         results['vdrop'] = DropInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
         results['vincr'] = IncreaseInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
-        results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
-        results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        # results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        # results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
     
     return results
 
@@ -160,6 +155,7 @@ def get_metrics_vv(image_q_processed, image_q_feature, image_ret_processed, imag
 def metric_evaluation(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
     
+
     for image_processed,image_feature,text_id,text_feature,vmap,tmap in zip(images_processed,image_features,text_ids,text_features,saliency_v,saliency_t):
         image_processed = image_processed.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)
