@@ -89,6 +89,10 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
 
+    print("Dataset: ", args.dataset)
+    print("Results for beta equals to: " +  str(args.beta) + "Learnable: " + str(args.learn) )
+    print("vdrop:", vdrop, "vincr:", vincr)
+    
     # Setup seed
     setup_seed(seed=args.seed)
 
@@ -227,5 +231,6 @@ if __name__ == "__main__":
     # tdrop = sum(k['tdrop'] for k in res) / len(res)
     # tincr = sum(k['tincr'] for k in res) / len(res)
     # print("vdrop:", vdrop, "vincr:", vincr, "tdrop:", tdrop, "tincr:", tincr)
+    print("Dataset: ", args.dataset)
     print("Results for beta equals to: " +  str(args.beta) + "Learnable: " + str(args.learn) )
     print("vdrop:", vdrop, "vincr:", vincr)

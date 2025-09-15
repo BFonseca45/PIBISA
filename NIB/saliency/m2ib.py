@@ -1,4 +1,4 @@
-from scripts.methods import vision_heatmap_iba,text_heatmap_iba
+from NIB.scripts.methods import vision_heatmap_iba,text_heatmap_iba
 import numpy as np
 
 def m2ib(model,text_ids,image_feat,beta=0.1):

@@ -6,4 +6,4 @@
 #SBATCH -e pibisa_CLIP.err             # STDERR
 
 python ../generate_attributions.py --dataset Flickr8kDataset --method cibisa --beta=2 --learn False 
-python ../generate_attributions.py --dataset Flickr8kDataset --method cibisa --beta=2 --learn False  
+python ../generate_attributions.py --dataset MSCXRDataset --method cibisa --beta=2 --learn False  

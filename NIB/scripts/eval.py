@@ -11,18 +11,13 @@ from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseIn
 from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
 
 # Project Imports
-from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
-
-
+from NIB.scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
 
 # TODO: Do we really need this?
 # sys.path.append(os.getcwd())
 
 # Environment Variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-
-
 
 
 # Function: Multiply an input tensor (after normalization) with a pixel attribution map
