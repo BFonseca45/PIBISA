@@ -77,8 +77,8 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="COCO", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "COCO"])
-    argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
+    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "COCO"])
+    argparser.add_argument("--method", type=str, default="m2ib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
     argparser.add_argument("--beta", type=float, default=2)
     argparser.add_argument("--learn", type=bool, default=False)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -187,7 +187,7 @@ if __name__ == "__main__":
             caption = [caption]
             
         else:
-            x = batch['image']
+            x = batch['image']            
             caption = batch['captions']
             batch_xs = batch['image_processed']
 
@@ -224,11 +224,12 @@ if __name__ == "__main__":
         elif args.method in ['rise']:
             v_saliency, t_saliency = rise(model, batch_xs, tid, im_f, tf)
         elif args.method in ['m2ib']:
-            v_saliency, t_saliency = m2ib(model, tid, batch_xs, args.beta)
+            v_saliency, t_saliency = m2ib(model, tid, batch_xs, args.beta)            
         elif args.method in ['nib']:
             v_saliency, t_saliency = nib(model, tid, batch_xs, args.num_steps, args.target_layer)
         elif args.method in ['cibisa']:
             v_saliency, _ = compute_saliency(x=batch_xs, x_target=tf, model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=args.learn)
+            v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
             t_saliency = 0
         else:
             v_saliency, t_saliency = method(model, tid, batch_xs)
