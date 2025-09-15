@@ -180,7 +180,12 @@ if __name__ == "__main__":
             x_pil = unnormalize(x) 
             batch_xs = processor(images=x_pil, return_tensors="pt")['pixel_values']
             batch_xs = batch_xs.to(device)            
-            caption = batch[1]
+            caption = []
+            caps = batch[1]
+            for cap in caps:
+                caption.append(cap[0])
+            caption = [caption]
+            
         else:
             x = batch['image']
             caption = batch['captions']
