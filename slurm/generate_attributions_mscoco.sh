@@ -7,4 +7,4 @@
 
 # python NIB/generate_attributions.py --dataset MSCocoDataset --method rise
 # python NIB/generate_attributions.py --dataset MSCocoDataset --method m2ib
-# python NIB/generate_attributions.py --dataset MSCocoDataset --method nib
+python NIB/generate_attributions.py --dataset MSCocoDataset --method nib
