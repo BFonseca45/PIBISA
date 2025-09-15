@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset
 
 # COCO Imports
-from coco import COCO
+from scripts.coco import COCO
 
 
 
