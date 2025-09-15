@@ -344,6 +344,7 @@ class MSCocoDataset(Dataset):
         # captions = self.label_text[idx]
 
         # return image_fname, image, image_processed, captions
+        pass
 
 
     # Method: Collate function
@@ -357,10 +358,3 @@ class MSCocoDataset(Dataset):
     #     }
         
     #     return output
-
-
-
-if __name__ == "__main__":
-    coco = MSCocoDataset(split='val', image_preprocessor=1)
-    print(coco.images)
-    print(coco.annotations)

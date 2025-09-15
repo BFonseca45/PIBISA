@@ -13,7 +13,7 @@ from torchvision.transforms.v2 import Compose, ToImage
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
-from scripts.data import Flickr8kDataset, MSCXRDataset
+from scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset
 # from datasets import ConceptualCaptions, collate_fn_cc, ImagenetDataset, collect_fn_imagenet
 from scripts.eval import metric_evaluation
 from scripts.methods import vision_heatmap_iba, text_heatmap_iba
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset"])
+    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
     argparser.add_argument("--method", type=str, default="nib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib"])
     argparser.add_argument("--beta", type=float, default=0.1)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -130,6 +130,16 @@ if __name__ == "__main__":
             image_preprocessor=processor,
             transform=Compose([ToImage()])
         )
+    
+    elif args.dataset == "MSCocoDataset":
+        dataset = MSCocoDataset(
+            split='val',
+            image_preprocessor=processor,
+            transform=Compose([ToImage()])
+        )
+        print(dataset.images)
+        print(dataset.annotations)
+        exit()
 
         
 
