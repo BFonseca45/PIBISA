@@ -141,12 +141,12 @@ def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, m
 def metric_evaluation(model, device, image_feats, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
     
-    for image_feat,image_feature,text_id,text_feature,vmap,tmap in zip(image_feats,image_features,text_ids,text_features,saliency_v,saliency_t):
+    for image_feat,image_feature,text_id,text_feature,vmap in zip(image_feats,image_features,text_ids,text_features,saliency_v):
         image_feat = image_feat.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)
         text_feature = text_feature.unsqueeze(0).to(device)
         vmap = np.expand_dims(vmap, axis=0)
-        results = get_metrics_vt(image_feat,image_feature,text_id,text_feature,vmap,tmap,model)
+        results = get_metrics_vt(image_feat,image_feature,text_id,text_feature,vmap,[],model)
         all_results.append(results)
     
     return all_results

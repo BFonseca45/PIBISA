@@ -22,7 +22,7 @@ class Flickr8kDataset(Dataset):
     """
 
 
-    def __init__(self, root='/nas-ctm01/datasets/public/Flickr8k', image_preprocessor=None, transform=None) -> None:
+    def __init__(self, root='/home/bfcoelho/Downloads/flickr8k', image_preprocessor=None, transform=None) -> None:
 
         assert image_preprocessor is not None, 'Please provide an image_preprocessor function'
 

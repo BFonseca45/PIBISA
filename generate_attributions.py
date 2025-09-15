@@ -77,10 +77,10 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset"])
-    argparser.add_argument("--method", type=str, default="nib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
-    argparser.add_argument("--beta", type=float, default=0.1)
-    argparser.add_argument("--learn", type=bool, default=True)
+    argparser.add_argument("--dataset", type=str, default="COCO", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "COCO"])
+    argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
+    argparser.add_argument("--beta", type=float, default=2)
+    argparser.add_argument("--learn", type=bool, default=False)
     argparser.add_argument("--num_steps", type=int, default=10)
     argparser.add_argument("--target_layer", type=int, default=9)
     argparser.add_argument("--batch_size", type=int, default=1, help="Batch size for experiments.")
@@ -89,9 +89,9 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
 
-    print("Dataset: ", args.dataset)
-    print("Results for beta equals to: " +  str(args.beta) + "Learnable: " + str(args.learn) )
-    print("vdrop:", vdrop, "vincr:", vincr)
+    # print("Dataset: ", args.dataset)
+    # print("Results for beta equals to: " +  str(args.beta) + "Learnable: " + str(args.learn) )
+    # print("vdrop:", vdrop, "vincr:", vincr)
     
     # Setup seed
     setup_seed(seed=args.seed)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     # Get model, processor, and tokenizer
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
     tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
 
     # Get evaluation method
@@ -126,23 +126,44 @@ if __name__ == "__main__":
             image_preprocessor=processor, 
             transform=Compose([ToImage()])
         )
-    
+        # Create dataloader
+        dataloader = DataLoader(
+            dataset=dataset, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=num_workers, 
+            collate_fn=dataset.collate_fn, 
+            pin_memory=True
+        )
     elif args.dataset == "MSCXRDataset":
         dataset = MSCXRDataset(
             split='test',
             image_preprocessor=processor,
             transform=Compose([ToImage()])
-        )        
-
-    # Create dataloader
-    dataloader = DataLoader(
-        dataset=dataset, 
-        batch_size=batch_size, 
-        shuffle=False, 
-        num_workers=num_workers, 
-        collate_fn=dataset.collate_fn, 
-        pin_memory=True
-    )
+        )
+        # Create dataloader
+        dataloader = DataLoader(
+            dataset=dataset, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=num_workers, 
+            collate_fn=dataset.collate_fn, 
+            pin_memory=True
+        )
+    elif args.dataset == "COCO":
+        transform = torchvision.transforms.Compose([torchvision.transforms.Resize((224,224)),
+                                torchvision.transforms.ToTensor(),
+                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+        dataset = torchvision.datasets.CocoCaptions(root='/home/bfcoelho/Downloads/coco/val2017/', annFile='/home/bfcoelho/Downloads/coco/annotations/captions_val2017.json',
+                                                    transform=transform)
+        # Create dataloader
+        dataloader = DataLoader(
+            dataset=dataset, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=num_workers, 
+            pin_memory=True
+        )
 
     # Initialize lists to store results
     image_saliency = list()
@@ -154,9 +175,16 @@ if __name__ == "__main__":
 
     # Go through the data
     for batch_idx, batch in tqdm(enumerate(dataloader)):
-        x = batch['image']
-        caption = batch['captions']
-        batch_xs = batch['image_processed']
+        if isinstance(dataloader.dataset, torchvision.datasets.CocoCaptions):
+            x = batch[0]
+            x_pil = unnormalize(x) 
+            batch_xs = processor(images=x_pil, return_tensors="pt")['pixel_values']
+            batch_xs = batch_xs.to(device)            
+            caption = batch[1]
+        else:
+            x = batch['image']
+            caption = batch['captions']
+            batch_xs = batch['image_processed']
 
         # TODO: Debugging stuff; will erase after testing
         # for i in range(len(x)):
@@ -166,7 +194,7 @@ if __name__ == "__main__":
         # exit()
 
         # Special Case: Flickr8kDataset has several captions for the same image
-        if isinstance(dataloader.dataset, Flickr8kDataset):
+        if isinstance(dataloader.dataset, (Flickr8kDataset, torchvision.datasets.CocoCaptions)):
             with torch.no_grad():
                 new_caption = []
                 for cp in caption:
@@ -201,7 +229,7 @@ if __name__ == "__main__":
             v_saliency, t_saliency = method(model, tid, batch_xs)
         
         image_saliency.append(v_saliency)
-        text_saliency.extend(t_saliency)
+        # text_saliency.extend(t_saliency)
         text_features.extend(tf.detach().cpu())
         image_feats.append(batch_xs.cpu())
         image_features.append(im_f)
