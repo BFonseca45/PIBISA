@@ -343,20 +343,21 @@ class MSCocoDataset(Dataset):
         image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
 
         # Captions
-        # captions = self.label_text[idx]
+        captions_ = self.image_to_annotations[image_id]
+        captions = [c['caption'] for c in captions_]
 
-        # return image_fname, image, image_processed, captions
-        pass
+        return image_id, image_fname, image, image_processed, captions
 
 
     # Method: Collate function
-    # def collate_fn(self, batch):
+    def collate_fn(self, batch):
 
-    #     output = {
-    #         "image_fname":[i[0] for i in batch],
-    #         "image":[i[1] for i in batch],
-    #         "image_processed":torch.stack([i[2] for i in batch], dim=0),
-    #         "captions":[i[3] for i in batch]
-    #     }
+        output = {
+            "image_id":[i[0] for i in batch],
+            "image_fname":[i[1] for i in batch],
+            "image":[i[2] for i in batch],
+            "image_processed":torch.stack([i[3] for i in batch], dim=0),
+            "captions":[i[4] for i in batch]
+        }
         
-    #     return output
+        return output

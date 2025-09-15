@@ -137,9 +137,6 @@ if __name__ == "__main__":
             image_preprocessor=processor,
             transform=Compose([ToImage()])
         )
-        print(dataset.image_to_annotations)
-        print(dataset.annotations)
-        exit()
 
         
 
@@ -177,7 +174,7 @@ if __name__ == "__main__":
         # exit()
 
         # Special Case: Flickr8kDataset has several captions for the same image
-        if isinstance(dataloader.dataset, Flickr8kDataset):
+        if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
                 for cp in caption:
