@@ -123,20 +123,20 @@ def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, m
     
     with torch.no_grad():
         vtargets = [CosSimilarity(text_feature)]
-        ttargets = [CosSimilarity(image_feature)]
+        # ttargets = [CosSimilarity(image_feature)]
         
-        # Remove start and end token
-        text_id = text_id[:,1:-1]
-        tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
-        model_clone = copy.deepcopy(model)
-        temp = np.ones_like(tmap).astype(int)
-        for idx,i in enumerate(text_id[0]):
-            i = i.item()
-            model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
+        # # Remove start and end token
+        # text_id = text_id[:,1:-1]
+        # tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
+        # model_clone = copy.deepcopy(model)
+        # temp = np.ones_like(tmap).astype(int)
+        # for idx,i in enumerate(text_id[0]):
+        #     i = i.item()
+        #     model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
         results['vdrop'] = DropInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
         results['vincr'] = IncreaseInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
-        results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
-        results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        # results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        # results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
     
     return results
 
