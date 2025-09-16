@@ -1,6 +1,5 @@
 # Imports
 import os
-import sys
 import numpy as np
 import copy
 from typing import List, Callable
@@ -12,9 +11,6 @@ from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfide
 
 # Project Imports
 from NIB.scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
-
-# TODO: Do we really need this?
-# sys.path.append(os.getcwd())
 
 # Environment Variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -112,8 +108,8 @@ class IncreaseInConfidenceText(CamMultImageConfidenceChange):
 
 
 
-# Function: Get metrics
-def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, model):
+# Function: Get metrics (vision and text)
+def get_metrics_vt(image_feat, image_feature, text_id, text_feature, vmap, tmap, model):
     results = {}
     
     with torch.no_grad():
@@ -137,16 +133,79 @@ def get_metrics_vt(image_feat,image_feature,text_id, text_feature, vmap, tmap, m
 
 
 
+# Function: Get metrics (vision and vision for retrieval)
+def get_metrics_vv(image_q_processed, image_q_feature, image_ret_processed, image_ret_feature, image_q_smap, image_ret_smap, model):
+    results = {}
+    
+    with torch.no_grad():
+        q_targets = [CosSimilarity(image_ret_feature)]
+        ret_targets = [CosSimilarity(image_q_feature)]
+
+        # Get results
+        results['qdrop'] = DropInConfidence()(image_q_processed, image_q_smap, q_targets, ImageFeatureExtractor(model))[0][0]*100
+        results['qincr'] = IncreaseInConfidence()(image_q_processed, image_q_smap, q_targets, ImageFeatureExtractor(model))[0][0]*100
+        results['retdrop'] = DropInConfidence()(image_ret_processed, image_ret_smap, ret_targets, ImageFeatureExtractor(model))[0][0]*100
+        results['retincr'] = IncreaseInConfidence()(image_ret_processed, image_ret_smap, ret_targets, ImageFeatureExtractor(model))[0][0]*100
+    
+    return results
+
+
+
 # Function: Compute metrics for all data
-def metric_evaluation(model, device, image_feats, image_features, text_ids, text_features, saliency_v, saliency_t):
+def metric_evaluation(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
     
-    for image_feat,image_feature,text_id,text_feature,vmap in zip(image_feats,image_features,text_ids,text_features,saliency_v):
-        image_feat = image_feat.unsqueeze(0).to(device)
+
+    for image_processed,image_feature,text_id,text_feature,vmap,tmap in zip(images_processed,image_features,text_ids,text_features,saliency_v,saliency_t):
+        image_processed = image_processed.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)
         text_feature = text_feature.unsqueeze(0).to(device)
         vmap = np.expand_dims(vmap, axis=0)
-        results = get_metrics_vt(image_feat,image_feature,text_id,text_feature,vmap,[],model)
+
+        # Get results
+        results = get_metrics_vt(
+            image_feat=image_processed,
+            image_feature=image_feature,
+            text_id=text_id,
+            text_feature=text_feature,
+            vmap=vmap,
+            tmap=tmap,
+            model=model
+        )
+        
+        all_results.append(results)
+    
+    return all_results
+
+
+
+# Function: Compute metrics for all data (retrieval model)
+def metric_evaluation_retrieval(model, device, images_q_processed, image_q_features, images_ret_processed, images_ret_features, image_q_smaps, image_ret_smaps):
+    all_results = []
+    
+    for image_q_processed, image_q_feature, image_ret_processed, image_ret_feature, image_q_smap, image_ret_smap in zip(images_q_processed, image_q_features, images_ret_processed, images_ret_features, image_q_smaps, image_ret_smaps):
+        image_q_processed = image_q_processed.unsqueeze(0).to(device)
+        image_q_feature = image_q_feature.unsqueeze(0).to(device)
+
+        # Retrieved Image(s)
+        image_ret_processed = image_ret_processed.unsqueeze(0).to(device)
+        image_ret_feature = image_ret_feature.unsqueeze(0).to(device)
+        
+        # Visual Saliency Maps
+        image_q_smap = np.expand_dims(image_q_smap, axis=0)
+        image_ret_smap = np.expand_dims(image_ret_smap, axis=0)
+
+        # Get results
+        results = get_metrics_vv(
+            image_q_processed=image_q_processed, 
+            image_q_feature=image_q_feature, 
+            image_ret_processed=image_ret_processed, 
+            image_ret_feature=image_ret_feature, 
+            image_q_smap=image_q_smap, 
+            image_ret_smap=image_ret_smap, 
+            model=model
+        )
+        
         all_results.append(results)
     
     return all_results

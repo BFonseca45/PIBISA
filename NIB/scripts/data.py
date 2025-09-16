@@ -8,6 +8,9 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 
+# COCO Imports
+from pycocotools.coco import COCO
+
 
 
 # Function: Build Flickr8k Dataset using Torchvision
@@ -262,6 +265,99 @@ class MSCXRDataset(Dataset):
             "image":[i[1] for i in batch],
             "image_processed":torch.stack([i[2] for i in batch], dim=0),
             "captions":[i[3] for i in batch]
+        }
+        
+        return output
+
+
+
+# Class: MSCocoDataset
+class MSCocoDataset(Dataset):
+
+    """
+    Website: https://cocodataset.org/#home
+    """
+
+
+    # Method: __init__
+    def __init__(self, 
+                 root='/nas-ctm01/datasets/public/coco-dataset',
+                 year=2017, 
+                 split='train',
+                 image_preprocessor=None, 
+                 transform=None):
+
+        assert image_preprocessor is not None, 'Please provide an image_preprocessor function'
+        assert year in (2014, 2015, 2017), 'Please provide a valid year (2014, 2015, 2017)'
+        assert split in ('train', 'val', 'test'), 'Please provide a valid split (train, val, test)'
+        
+        # Get images path
+        image_folder = os.path.join(root, str(year), f"{split}{str(year)}")
+
+        # Open CSV with MS-Coco annotations
+        coco_ = COCO(
+            annotation_file=os.path.join(root, str(year), "annotations", f"captions_{split}{year}.json")
+        )
+        
+
+        # Images and Annotations
+        self.image_to_annotations = coco_.imgToAnns
+        self.categories_to_images = coco_.catToImgs
+        self.images = coco_.imgs
+        self.images_ids = list(self.images.keys())
+        self.annotations = coco_.anns
+        self.categories = coco_.cats
+        self.image_folder = image_folder
+        self.image_preprocessor = image_preprocessor
+        self.transform = transform
+
+        return
+    
+
+    # Method: __len__
+    def __len__(self):
+        return len(self.images_ids)
+    
+
+    # Method: __getitem__
+    def __getitem__(self, idx:int):
+
+        """
+        Args:
+            idx (int): Index
+
+        Returns:
+            dict: Dict(image, target). target is a list of captions for the image.
+        """
+
+        # Get image ID and image filename
+        image_id = self.images_ids[idx]
+        image_fname = self.images[image_id]['file_name']
+
+        # Image
+        image = Image.open(os.path.join(self.image_folder, image_fname)).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+
+        # Image processed (remove batch size)
+        image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
+
+        # Captions
+        captions_ = self.image_to_annotations[image_id]
+        captions = [c['caption'] for c in captions_]
+
+        return image_id, image_fname, image, image_processed, captions
+
+
+    # Method: Collate function
+    def collate_fn(self, batch):
+
+        output = {
+            "image_id":[i[0] for i in batch],
+            "image_fname":[i[1] for i in batch],
+            "image":[i[2] for i in batch],
+            "image_processed":torch.stack([i[3] for i in batch], dim=0),
+            "captions":[i[4] for i in batch]
         }
         
         return output

@@ -127,7 +127,7 @@ def rise_t(model,image,text_features):
 
 
 
-def rise(model,image_feat,tids,image_features,text_features):
+def rise(model, image_feat, tids, image_features, text_features):
     saliency_v = []
     saliency_t = []
     for idx in range(image_feat.shape[0]):
