@@ -85,7 +85,10 @@ if __name__ == "__main__":
     argparser.add_argument("--batch_size", type=int, default=32, help="Batch size for experiments.")
     argparser.add_argument("--num_workers", type=int, default=0, help="Number of workers.")
     argparser.add_argument("--seed", type=int, default=0, help="Seed for the sake of reproducibility.")
+    argparser.add_argument("--save_saliency_maps", action='store_true', default=False, help="Whether to save the saliency maps or not.")
+    argparser.add_argument("--save_path", type=str, default="results/saliency_maps/", help="Path to save the saliency maps.")
     args = argparser.parse_args()
+
 
 
     # Setup seed
@@ -149,6 +152,7 @@ if __name__ == "__main__":
 
 
     # Initialize lists to store results
+    image_fnames = list()
     image_saliency = list()
     text_saliency = list()
     images_processed = list()
@@ -158,6 +162,7 @@ if __name__ == "__main__":
 
     # Go through the data
     for batch_idx, batch in tqdm(enumerate(dataloader)):
+        image_fname = batch['image_fname']
         image = batch['image']
         captions = batch['captions']
         image_processed = batch['image_processed']
@@ -220,6 +225,7 @@ if __name__ == "__main__":
         else:
             v_saliency, t_saliency = method(model, tid, image_processed)
         
+        image_fnames.append(image_fname)
         image_saliency.append(v_saliency)
         text_saliency.extend(t_saliency)
         text_features.extend(tf.detach().cpu())
@@ -228,12 +234,14 @@ if __name__ == "__main__":
         text_ids.extend(tid)
 
 
+    # Prepare data
+    image_fnames = np.concatenate(image_fnames, axis=0)
+    image_saliency = np.concatenate(image_saliency, axis=0)
+    text_features = torch.stack(text_features, dim=0)
     images_processed = torch.cat(images_processed, dim=0)
     image_features = torch.cat(image_features, dim=0)
-    text_features = torch.stack(text_features, dim=0)
-    image_saliency = np.concatenate(image_saliency, axis=0)
-
-
+    
+    
     # Get results
     res = metric_evaluation(
         model=model, 
@@ -254,3 +262,17 @@ if __name__ == "__main__":
     tdrop = sum(k['tdrop'] for k in res) / len(res)
     tincr = sum(k['tincr'] for k in res) / len(res)
     print("vdrop:", vdrop, "vincr:", vincr, "tdrop:", tdrop, "tincr:", tincr)
+
+
+
+    # Save saliency maps
+    if args.save_saliency_maps:
+        save_path = os.path.join(args.save_path, args.dataset, args.method)
+        os.makedirs(save_path, exist_ok=True)
+
+        for img_fname, img_smap in zip(image_fnames, image_saliency):
+            np.save(
+                file=os.path.join(save_path, img_fname.replace('.jpg','').replace('.png','')+'.npy'), 
+                arr=img_smap, 
+                allow_pickle=True
+            )
