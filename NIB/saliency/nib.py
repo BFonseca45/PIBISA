@@ -1,14 +1,22 @@
-import torch
-import torch.nn.functional as F
+# Imports
 import numpy as np
+
+# PyTorch Imports
+import torch
+
+# Transformers Imports
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling
 from transformers.modeling_attn_mask_utils import _create_4d_causal_attention_mask, _prepare_4d_attention_mask
 
 
+
+# Function: Min-Max Normalization
 def normalize(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
+
+# Function: Get hidden states from the vision model
 def get_hs_v(model, image_feats, target_layer=9):
     output_attentions = False
     output_hidden_states = True
@@ -41,6 +49,8 @@ def get_hs_v(model, image_feats, target_layer=9):
     return hidden_states, attention_mask, causal_attention_mask, output_attentions, output_hidden_states, all_attentions, encoder_states
 
 
+
+# Function: Get output from the vision model
 def get_output_v(model, hs, attention_mask, causal_attention_mask, output_attentions, output_hidden_states, all_attentions, encoder_states, target_layer=9):
     for idx in range(target_layer, len(model.vision_model.encoder.layers)):
         encoder_layer = model.vision_model.encoder.layers[idx]
@@ -74,6 +84,8 @@ def get_output_v(model, hs, attention_mask, causal_attention_mask, output_attent
     return image_features
 
 
+
+# Function: Get hidden states from the text model
 def get_hs_t(model, text_ids, target_layer=9):
     output_attentions = False
     output_hidden_states = True
@@ -120,6 +132,8 @@ def get_hs_t(model, text_ids, target_layer=9):
     return hidden_states, attention_mask, causal_attention_mask, output_attentions, output_hidden_states, all_attentions, input_ids, encoder_states
 
 
+
+# Function: Get output from the text model
 def get_output_t(model, hs, attention_mask, causal_attention_mask, output_attentions, output_hidden_states, all_attentions, input_ids, encoder_states, target_layer=9):
     for idx in range(target_layer, len(model.text_model.encoder.layers)):
         encoder_layer = model.text_model.encoder.layers[idx]
@@ -183,6 +197,8 @@ def get_output_t(model, hs, attention_mask, causal_attention_mask, output_attent
     return text_features
 
 
+
+# Function: NIB for vision
 def nib_v(model, image_feats, text_features, num_steps=10, target_layer=9):
 
     loss_fn = torch.nn.CosineSimilarity(eps=1e-6)
@@ -217,6 +233,8 @@ def nib_v(model, image_feats, text_features, num_steps=10, target_layer=9):
     return saliency_v
 
 
+
+# Function: NIB for text
 def nib_t(model, text_ids, image_features, num_steps=10, target_layer=9):
     loss_fn = torch.nn.CosineSimilarity(eps=1e-6)
     hidden_states, attention_mask, causal_attention_mask, output_attentions, output_hidden_states, all_attentions, input_ids, encoder_states = get_hs_t(
@@ -246,6 +264,8 @@ def nib_t(model, text_ids, image_features, num_steps=10, target_layer=9):
     return saliency_t
 
 
+
+# Function: NIB
 def nib(model, text_ids, image_feats, num_steps=10, target_layer=9):
     saliency_v = nib_v(model, image_feats, torch.cat([model.get_text_features(
         t) for t in text_ids], dim=0), num_steps=num_steps, target_layer=target_layer)
