@@ -10,7 +10,7 @@ from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseIn
 from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
 
 # Project Imports
-from NIB.scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
+from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
 
 # Environment Variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
