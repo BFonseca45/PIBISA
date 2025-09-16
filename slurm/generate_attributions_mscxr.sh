@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --partition=gpu_min8gb
-#SBATCH --qos=gpu_min8gb
+#SBATCH --partition=gpu_min11gb
+#SBATCH --qos=gpu_min11gb
 #SBATCH --job-name=gen_att_mscxr         # Job name
 #SBATCH -o gen_att_mscxr.out             # STDOUT
 #SBATCH -e gen_att_mscxr.err             # STDERR
