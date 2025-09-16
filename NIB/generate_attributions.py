@@ -259,9 +259,11 @@ if __name__ == "__main__":
     # Get average values for results
     vdrop = sum(k['vdrop'] for k in res) / len(res)
     vincr = sum(k['vincr'] for k in res) / len(res)
-    tdrop = sum(k['tdrop'] for k in res) / len(res)
-    tincr = sum(k['tincr'] for k in res) / len(res)
-    print("vdrop:", vdrop, "vincr:", vincr, "tdrop:", tdrop, "tincr:", tincr)
+    print("vdrop:", vdrop, "vincr:", vincr)
+
+    # tdrop = sum(k['tdrop'] for k in res) / len(res)
+    # tincr = sum(k['tincr'] for k in res) / len(res)
+    # print("tdrop:", tdrop, "tincr:", tincr)
 
 
 
