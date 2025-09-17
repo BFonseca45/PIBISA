@@ -170,15 +170,15 @@ if __name__ == "__main__":
         if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
-                print(len(captions), np.shape(captions))
+                # print(len(captions), np.shape(captions))
                 for idx, cp in enumerate(captions):
-                    print(np.shape(cp))
+                    # print(np.shape(cp))
                     tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
-                    print(tids[0].shape, tids[1].shape)
+                    # print(tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
-                    print(tf[0].shape, tf[1].shape)
+                    # print(tf[0].shape, tf[1].shape)
                     tf = torch.cat(tf, dim=0)
-                    print(tf.shape)
+                    # print(tf.shape)
 
                     # TODO: Remove this part after testing, I believe the authors committed a mistake here
                     # im_features = model.get_image_features(image_processed.to(device))[0]
@@ -186,12 +186,12 @@ if __name__ == "__main__":
                     # This is the correct way of doing it: for each set of captions there is a specific image with index = idx
                     img_proc = image_processed[idx].unsqueeze(0)
                     im_features = model.get_image_features(img_proc.to(device))
-                    print(im_features.shape, img_proc.shape, image_processed.shape)
+                    # print(im_features.shape, img_proc.shape, image_processed.shape)
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
-                    print(prob.shape)
+                    # print(prob.shape)
                     new_caption.append(cp[prob.argmax().item()])
-                    print(np.shape(new_caption))
-                    exit()
+                    # print(np.shape(new_caption))
+                    # exit()
                 captions = new_caption
 
 
