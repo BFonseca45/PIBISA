@@ -7,4 +7,5 @@
 
 # python NIB/generate_attributions.py --dataset Flickr8kDataset --method rise
 python NIB/generate_attributions.py --dataset Flickr8kDataset --method m2ib --batch_size 1
-python NIB/generate_attributions.py --dataset Flickr8kDataset --method nib --batch_size 1
+python NIB/generate_attributions.py --dataset Flickr8kDataset --method m2ib --batch_size 32
+# python NIB/generate_attributions.py --dataset Flickr8kDataset --method nib --batch_size 1
