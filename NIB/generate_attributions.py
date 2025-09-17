@@ -170,8 +170,9 @@ if __name__ == "__main__":
         if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
+                print(len(captions), np.shape(captions))
                 for cp in captions:
-                    print(cp.shape)
+                    print(np.shape(cp))
                     tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
                     print(tids, tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
