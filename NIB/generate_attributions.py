@@ -14,9 +14,7 @@ from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
 from scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset
-# from datasets import ConceptualCaptions, collate_fn_cc, ImagenetDataset, collect_fn_imagenet
-from scripts.eval import metric_evaluation
-from scripts.methods import vision_heatmap_iba, text_heatmap_iba
+from scripts.eval import metric_evaluation, metric_evaluation_vision
 from saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
 
@@ -160,6 +158,7 @@ if __name__ == "__main__":
     image_features = list()
     text_ids = list()
 
+
     # Go through the data
     for batch_idx, batch in tqdm(enumerate(dataloader)):
         image_fname = batch['image_fname']
@@ -172,11 +171,17 @@ if __name__ == "__main__":
             with torch.no_grad():
                 new_caption = []
                 for cp in captions:
+                    print(cp.shape)
                     tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
+                    print(tids, tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
+                    print(tf, tf[0].shape, tf[1].shape)
                     tf = torch.cat(tf, dim=0)
+                    print(tf.shape)
                     im_features = model.get_image_features(image_processed.to(device))[0]
+                    print(im_features.shape, image_processed.shape)
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
+                    print(prob.shape)
                     new_caption.append(cp[prob.argmax().item()])
                 captions = new_caption
 
@@ -243,7 +248,7 @@ if __name__ == "__main__":
     
     
     # Get results
-    res = metric_evaluation(
+    res = metric_evaluation_vision(
         model=model, 
         device=device, 
         images_processed=images_processed, 

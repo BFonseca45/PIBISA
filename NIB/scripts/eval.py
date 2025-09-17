@@ -114,21 +114,35 @@ def get_metrics_vt(image_feat, image_feature, text_id, text_feature, vmap, tmap,
     
     with torch.no_grad():
         vtargets = [CosSimilarity(text_feature)]
-        # ttargets = [CosSimilarity(image_feature)]
+        ttargets = [CosSimilarity(image_feature)]
         
-        # # Remove start and end token
-        # text_id = text_id[:,1:-1]
-        # tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
-        # model_clone = copy.deepcopy(model)
-        # temp = np.ones_like(tmap).astype(int)
-        # for idx,i in enumerate(text_id[0]):
-        #     i = i.item()
-        #     model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
+        # Remove start and end token
+        text_id = text_id[:,1:-1]
+        tmap = np.expand_dims(tmap, axis=0)[:,1:-1]
+        model_clone = copy.deepcopy(model)
+        temp = np.ones_like(tmap).astype(int)
+        for idx,i in enumerate(text_id[0]):
+            i = i.item()
+            model_clone.text_model.embeddings.token_embedding.weight[i] = model_clone.text_model.embeddings.token_embedding.weight[i] * tmap[0][idx]
         results['vdrop'] = DropInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
         results['vincr'] = IncreaseInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0]*100
-        # results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
-        # results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        results['tdrop'] = DropInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
+        results['tincr'] = IncreaseInConfidenceText()(text_id, temp, ttargets, TextFeatureExtractor(model),TextFeatureExtractor(model_clone))[0][0]*100
     
+    return results
+
+
+
+# Function: Get metrics (vision only)
+def get_metrics_v(image_feat, image_feature, text_id, text_feature, vmap, tmap, model):
+    results = {}
+    
+    with torch.no_grad():
+        vtargets = [CosSimilarity(text_feature)]
+        
+        results['vdrop'] = DropInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0] * 100
+        results['vincr'] = IncreaseInConfidence()(image_feat, vmap, vtargets, ImageFeatureExtractor(model))[0][0] * 100
+
     return results
 
 
@@ -151,7 +165,7 @@ def get_metrics_vv(image_q_processed, image_q_feature, image_ret_processed, imag
 
 
 
-# Function: Compute metrics for all data
+# Function: Compute metrics for all data (vision and text)
 def metric_evaluation(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
     
@@ -164,6 +178,34 @@ def metric_evaluation(model, device, images_processed, image_features, text_ids,
 
         # Get results
         results = get_metrics_vt(
+            image_feat=image_processed,
+            image_feature=image_feature,
+            text_id=text_id,
+            text_feature=text_feature,
+            vmap=vmap,
+            tmap=tmap,
+            model=model
+        )
+        
+        all_results.append(results)
+    
+    return all_results
+
+
+
+# Function: Compute metrics for all data (vision only)
+def metric_evaluation_vision(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
+    all_results = []
+    
+
+    for image_processed,image_feature,text_id,text_feature,vmap,tmap in zip(images_processed,image_features,text_ids,text_features,saliency_v,saliency_t):
+        image_processed = image_processed.unsqueeze(0).to(device)
+        image_feature = image_feature.unsqueeze(0).to(device)
+        text_feature = text_feature.unsqueeze(0).to(device)
+        vmap = np.expand_dims(vmap, axis=0)
+
+        # Get results
+        results = get_metrics_v(
             image_feat=image_processed,
             image_feature=image_feature,
             text_id=text_id,
