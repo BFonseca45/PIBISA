@@ -179,7 +179,8 @@ if __name__ == "__main__":
                     print(tf[0].shape, tf[1].shape)
                     tf = torch.cat(tf, dim=0)
                     print(tf.shape)
-                    im_features = model.get_image_features(image_processed.to(device))[0]
+                    # im_features = model.get_image_features(image_processed.to(device))[0]
+                    im_features = model.get_image_features(image_processed.to(device))
                     print(im_features.shape, image_processed.shape)
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
                     print(prob.shape)
