@@ -6,10 +6,10 @@
 #SBATCH -e gen_att_mscoco.err             # STDERR
 
 echo "m2ib"
-python NIB/generate_attributions.py --dataset MSCocoDataset --method m2ib
+python NIB/generate_attributions.py --dataset MSCocoDataset --method m2ib --batch_size 32
 
 echo "nib"
-python NIB/generate_attributions.py --dataset MSCocoDataset --method nib
+python NIB/generate_attributions.py --dataset MSCocoDataset --method nib --batch_size 32
 
 echo "rise"
-python NIB/generate_attributions.py --dataset MSCocoDataset --method rise
+python NIB/generate_attributions.py --dataset MSCocoDataset --method rise --batch_size 32
