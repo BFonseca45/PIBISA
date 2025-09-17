@@ -184,6 +184,7 @@ if __name__ == "__main__":
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
                     print(prob.shape)
                     new_caption.append(cp[prob.argmax().item()])
+                    exit()
                 captions = new_caption
 
 
