@@ -14,9 +14,7 @@ from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
 from scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset
-# from datasets import ConceptualCaptions, collate_fn_cc, ImagenetDataset, collect_fn_imagenet
-from scripts.eval import metric_evaluation
-from scripts.methods import vision_heatmap_iba, text_heatmap_iba
+from scripts.eval import metric_evaluation, metric_evaluation_vision
 from saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
 
@@ -85,7 +83,10 @@ if __name__ == "__main__":
     argparser.add_argument("--batch_size", type=int, default=32, help="Batch size for experiments.")
     argparser.add_argument("--num_workers", type=int, default=0, help="Number of workers.")
     argparser.add_argument("--seed", type=int, default=0, help="Seed for the sake of reproducibility.")
+    argparser.add_argument("--save_saliency_maps", action='store_true', default=False, help="Whether to save the saliency maps or not.")
+    argparser.add_argument("--save_path", type=str, default="results/saliency_maps/", help="Path to save the saliency maps.")
     args = argparser.parse_args()
+
 
 
     # Setup seed
@@ -149,6 +150,7 @@ if __name__ == "__main__":
 
 
     # Initialize lists to store results
+    image_fnames = list()
     image_saliency = list()
     text_saliency = list()
     images_processed = list()
@@ -156,8 +158,10 @@ if __name__ == "__main__":
     image_features = list()
     text_ids = list()
 
+
     # Go through the data
     for batch_idx, batch in tqdm(enumerate(dataloader)):
+        image_fname = batch['image_fname']
         image = batch['image']
         captions = batch['captions']
         image_processed = batch['image_processed']
@@ -166,13 +170,28 @@ if __name__ == "__main__":
         if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
-                for cp in captions:
+                # print(len(captions), np.shape(captions))
+                for idx, cp in enumerate(captions):
+                    # print(np.shape(cp))
                     tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
+                    # print(tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
+                    # print(tf[0].shape, tf[1].shape)
                     tf = torch.cat(tf, dim=0)
-                    im_features = model.get_image_features(image_processed.to(device))[0]
+                    # print(tf.shape)
+
+                    # TODO: Remove this part after testing, I believe the authors committed a mistake here
+                    # im_features = model.get_image_features(image_processed.to(device))[0]
+
+                    # This is the correct way of doing it: for each set of captions there is a specific image with index = idx
+                    img_proc = image_processed[idx].unsqueeze(0)
+                    im_features = model.get_image_features(img_proc.to(device))
+                    # print(im_features.shape, img_proc.shape, image_processed.shape)
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
+                    # print(prob.shape)
                     new_caption.append(cp[prob.argmax().item()])
+                    # print(np.shape(new_caption))
+                    # exit()
                 captions = new_caption
 
 
@@ -220,6 +239,7 @@ if __name__ == "__main__":
         else:
             v_saliency, t_saliency = method(model, tid, image_processed)
         
+        image_fnames.append(image_fname)
         image_saliency.append(v_saliency)
         text_saliency.extend(t_saliency)
         text_features.extend(tf.detach().cpu())
@@ -228,14 +248,16 @@ if __name__ == "__main__":
         text_ids.extend(tid)
 
 
+    # Prepare data
+    image_fnames = np.concatenate(image_fnames, axis=0)
+    image_saliency = np.concatenate(image_saliency, axis=0)
+    text_features = torch.stack(text_features, dim=0)
     images_processed = torch.cat(images_processed, dim=0)
     image_features = torch.cat(image_features, dim=0)
-    text_features = torch.stack(text_features, dim=0)
-    image_saliency = np.concatenate(image_saliency, axis=0)
-
-
+    
+    
     # Get results
-    res = metric_evaluation(
+    res = metric_evaluation_vision(
         model=model, 
         device=device, 
         images_processed=images_processed, 
@@ -251,6 +273,22 @@ if __name__ == "__main__":
     # Get average values for results
     vdrop = sum(k['vdrop'] for k in res) / len(res)
     vincr = sum(k['vincr'] for k in res) / len(res)
-    tdrop = sum(k['tdrop'] for k in res) / len(res)
-    tincr = sum(k['tincr'] for k in res) / len(res)
-    print("vdrop:", vdrop, "vincr:", vincr, "tdrop:", tdrop, "tincr:", tincr)
+    print("vdrop:", vdrop, "vincr:", vincr)
+
+    # tdrop = sum(k['tdrop'] for k in res) / len(res)
+    # tincr = sum(k['tincr'] for k in res) / len(res)
+    # print("tdrop:", tdrop, "tincr:", tincr)
+
+
+
+    # Save saliency maps
+    if args.save_saliency_maps:
+        save_path = os.path.join(args.save_path, args.dataset, args.method)
+        os.makedirs(save_path, exist_ok=True)
+
+        for img_fname, img_smap in zip(image_fnames, image_saliency):
+            np.save(
+                file=os.path.join(save_path, img_fname.replace('.jpg','').replace('.png','')+'.npy'), 
+                arr=img_smap, 
+                allow_pickle=True
+            )
