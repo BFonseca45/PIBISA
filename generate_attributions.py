@@ -13,9 +13,9 @@ from torchvision.transforms.v2 import Compose, ToImage
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
-from NIB.scripts.data import Flickr8kDataset, MSCXRDataset
+from NIB.scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset
 # from datasets import ConceptualCaptions, collate_fn_cc, ImagenetDataset, collect_fn_imagenet
-from NIB.scripts.eval import metric_evaluation
+from NIB.scripts.eval import metric_evaluation, metric_evaluation_vision
 from NIB.scripts.methods import vision_heatmap_iba, text_heatmap_iba
 from NIB.saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
@@ -77,8 +77,8 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "COCO"])
-    argparser.add_argument("--method", type=str, default="m2ib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
+    argparser.add_argument("--dataset", type=str, default="MSCocoDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
+    argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
     argparser.add_argument("--beta", type=float, default=2)
     argparser.add_argument("--learn", type=bool, default=False)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -126,70 +126,44 @@ if __name__ == "__main__":
             image_preprocessor=processor, 
             transform=Compose([ToImage()])
         )
-        # Create dataloader
-        dataloader = DataLoader(
-            dataset=dataset, 
-            batch_size=batch_size, 
-            shuffle=False, 
-            num_workers=num_workers, 
-            collate_fn=dataset.collate_fn, 
-            pin_memory=True
-        )
     elif args.dataset == "MSCXRDataset":
         dataset = MSCXRDataset(
             split='test',
             image_preprocessor=processor,
             transform=Compose([ToImage()])
         )
-        # Create dataloader
-        dataloader = DataLoader(
-            dataset=dataset, 
-            batch_size=batch_size, 
-            shuffle=False, 
-            num_workers=num_workers, 
-            collate_fn=dataset.collate_fn, 
-            pin_memory=True
+    elif args.dataset == "MSCocoDataset":
+        dataset = MSCocoDataset(
+            split='val',
+            image_preprocessor=processor,
+            transform=Compose([ToImage()])
         )
-    elif args.dataset == "COCO":
-        transform = torchvision.transforms.Compose([torchvision.transforms.Resize((224,224)),
-                                torchvision.transforms.ToTensor(),
-                                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-        dataset = torchvision.datasets.CocoCaptions(root='/home/bfcoelho/Downloads/coco/val2017/', annFile='/home/bfcoelho/Downloads/coco/annotations/captions_val2017.json',
-                                                    transform=transform)
-        # Create dataloader
-        dataloader = DataLoader(
-            dataset=dataset, 
-            batch_size=batch_size, 
-            shuffle=False, 
-            num_workers=num_workers, 
-            pin_memory=True
-        )
+        
+    # Create dataloader
+    dataloader = DataLoader(
+        dataset=dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=num_workers, 
+        collate_fn=dataset.collate_fn, 
+        pin_memory=True
+    )
 
     # Initialize lists to store results
+    image_fnames = list()
     image_saliency = list()
     text_saliency = list()
-    image_feats = list()
+    images_processed = list()
     text_features = list()
     image_features = list()
     text_ids = list()
 
     # Go through the data
-    for batch_idx, batch in tqdm(enumerate(dataloader)):
-        if isinstance(dataloader.dataset, torchvision.datasets.CocoCaptions):
-            x = batch[0]
-            x_pil = unnormalize(x) 
-            batch_xs = processor(images=x_pil, return_tensors="pt")['pixel_values']
-            batch_xs = batch_xs.to(device)            
-            caption = []
-            caps = batch[1]
-            for cap in caps:
-                caption.append(cap[0])
-            caption = [caption]
-            
-        else:
-            x = batch['image']            
-            caption = batch['captions']
-            batch_xs = batch['image_processed']
+    for batch_idx, batch in tqdm(enumerate(dataloader)):       
+        image_fname = batch['image_fname']
+        image = batch['image']
+        captions = batch['captions']
+        image_processed = batch['image_processed']
 
         # TODO: Debugging stuff; will erase after testing
         # for i in range(len(x)):
@@ -210,53 +184,79 @@ if __name__ == "__main__":
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
                     new_caption.append(cp[prob.argmax().item()])
                 caption = new_caption
+        # Special Case: Flickr8kDataset has several captions for the same image
+        if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
+            with torch.no_grad():
+                new_caption = []
+                # print(len(captions), np.shape(captions))
+                for idx, cp in enumerate(captions):
+                    # print(np.shape(cp))
+                    tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
+                    # print(tids[0].shape, tids[1].shape)
+                    tf = [model.get_text_features(t) for t in tids]
+                    # print(tf[0].shape, tf[1].shape)
+                    tf = torch.cat(tf, dim=0)
+                    # print(tf.shape)
 
+                    # TODO: Remove this part after testing, I believe the authors committed a mistake here
+                    # im_features = model.get_image_features(image_processed.to(device))[0]
+
+                    # This is the correct way of doing it: for each set of captions there is a specific image with index = idx
+                    img_proc = image_processed[idx].unsqueeze(0)
+                    im_features = model.get_image_features(img_proc.to(device))
+                    # print(im_features.shape, img_proc.shape, image_processed.shape)
+                    prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
+                    # print(prob.shape)
+                    new_caption.append(cp[prob.argmax().item()])
+                    # print(np.shape(new_caption))
+                    # exit()
+                captions = new_caption
 
         # TODO: Review some of these dimensions
-        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(device) for cp in caption]
+        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(device) for cp in captions]
         tf = [model.get_text_features(t) for t in tid]
         tf = torch.cat(tf, dim=0)
-        batch_xs = batch_xs.to(device)
-        im_f = model.get_image_features(batch_xs).detach().cpu()
+        image_processed = image_processed.to(device)
+        im_f = model.get_image_features(image_processed).detach().cpu()
 
         if args.method in ['chefer', 'gradcam', 'saliencymap', 'fast_ig', 'mfaba']:
             v_saliency, t_saliency = method(model, processor, caption, x)
         elif args.method in ['rise']:
-            v_saliency, t_saliency = rise(model, batch_xs, tid, im_f, tf)
+            v_saliency, t_saliency = rise(model, image_processed, tid, im_f, tf)
         elif args.method in ['m2ib']:
-            v_saliency, t_saliency = m2ib(model, tid, batch_xs, args.beta)            
+            v_saliency, t_saliency = m2ib(model, tid, image_processed, args.beta)            
         elif args.method in ['nib']:
-            v_saliency, t_saliency = nib(model, tid, batch_xs, args.num_steps, args.target_layer)
+            v_saliency, t_saliency = nib(model, tid, image_processed, args.num_steps, args.target_layer)
         elif args.method in ['cibisa']:
-            v_saliency, _ = compute_saliency(x=batch_xs, x_target=tf, model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=args.learn)
+            v_saliency, _ = compute_saliency(x=image_processed, x_target=tf, model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=args.learn)
             v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
             t_saliency = 0
         else:
-            v_saliency, t_saliency = method(model, tid, batch_xs)
+            v_saliency, t_saliency = method(model, tid, image_processed)
         
+        image_fnames.append(image_fname)
         image_saliency.append(v_saliency)
-        # text_saliency.extend(t_saliency)
         text_features.extend(tf.detach().cpu())
-        image_feats.append(batch_xs.cpu())
+        images_processed.append(image_processed.cpu())
         image_features.append(im_f)
         text_ids.extend(tid)
 
 
-    image_feats = torch.cat(image_feats, dim=0)
-    image_features = torch.cat(image_features, dim=0)
-    text_features = torch.stack(text_features, dim=0)
+    # Prepare data
+    image_fnames = np.concatenate(image_fnames, axis=0)
     image_saliency = np.concatenate(image_saliency, axis=0)
+    text_features = torch.stack(text_features, dim=0)
+    images_processed = torch.cat(images_processed, dim=0)
+    image_features = torch.cat(image_features, dim=0)
 
     # Get results
-    res = metric_evaluation(
+    res = metric_evaluation_vision(
         model=model, 
         device=device, 
-        image_feats=image_feats, 
+        images_processed=images_processed, 
         image_features=image_features,
-        text_ids=text_ids,
         text_features=text_features, 
         saliency_v=image_saliency, 
-        saliency_t=text_saliency
     )
 
     # Get average values for results

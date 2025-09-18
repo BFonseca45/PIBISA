@@ -281,7 +281,7 @@ class MSCocoDataset(Dataset):
 
     # Method: __init__
     def __init__(self, 
-                 root='/nas-ctm01/datasets/public/coco-dataset',
+                 root='/home/bfcoelho/Downloads/coco',
                  year=2017, 
                  split='train',
                  image_preprocessor=None, 

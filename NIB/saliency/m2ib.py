@@ -2,7 +2,7 @@
 import numpy as np
 
 # Project Imports
-from scripts.methods import vision_heatmap_iba,text_heatmap_iba
+from NIB.scripts.methods import vision_heatmap_iba,text_heatmap_iba
 
 
 

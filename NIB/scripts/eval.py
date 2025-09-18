@@ -10,7 +10,7 @@ from pytorch_grad_cam.metrics.cam_mult_image import DropInConfidence, IncreaseIn
 from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
 
 # Project Imports
-from scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
+from NIB.scripts.utils import ImageFeatureExtractor, TextFeatureExtractor, CosSimilarity
 
 # Environment Variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -134,7 +134,7 @@ def get_metrics_vt(image_feat, image_feature, text_id, text_feature, vmap, tmap,
 
 
 # Function: Get metrics (vision only)
-def get_metrics_v(image_feat, image_feature, text_id, text_feature, vmap, tmap, model):
+def get_metrics_v(image_feat, text_feature, vmap, model):
     results = {}
     
     with torch.no_grad():
@@ -194,11 +194,10 @@ def metric_evaluation(model, device, images_processed, image_features, text_ids,
 
 
 # Function: Compute metrics for all data (vision only)
-def metric_evaluation_vision(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
-    all_results = []
-    
+def metric_evaluation_vision(model, device, images_processed, image_features, text_features, saliency_v):
+    all_results = []    
 
-    for image_processed,image_feature,text_id,text_feature,vmap,tmap in zip(images_processed,image_features,text_ids,text_features,saliency_v,saliency_t):
+    for image_processed,image_feature,text_feature,vmap in zip(images_processed,image_features,text_features,saliency_v):
         image_processed = image_processed.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)
         text_feature = text_feature.unsqueeze(0).to(device)
@@ -207,11 +206,8 @@ def metric_evaluation_vision(model, device, images_processed, image_features, te
         # Get results
         results = get_metrics_v(
             image_feat=image_processed,
-            image_feature=image_feature,
-            text_id=text_id,
             text_feature=text_feature,
             vmap=vmap,
-            tmap=tmap,
             model=model
         )
         
