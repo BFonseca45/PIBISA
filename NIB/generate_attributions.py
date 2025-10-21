@@ -170,7 +170,12 @@ if __name__ == "__main__":
     for batch_idx, batch in tqdm(enumerate(dataloader)):
         image_fname = batch['image_fname']
         image = batch['image']
-        captions = batch['captions']
+
+        if isinstance(dataset, GPR1200Dataset):
+            captions = batch['label_text']
+        else:
+            captions = batch['captions']
+
         image_processed = batch['image_processed']
 
         # Special Case: Flickr8kDataset has several captions for the same image
