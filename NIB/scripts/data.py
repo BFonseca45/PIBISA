@@ -434,7 +434,7 @@ class GPR1200Dataset(Dataset):
         image_fname = self.image_fnames[idx]
 
         # Image
-        image = Image.open(os.path.join(self.root, image_fname)).convert('RGB')
+        image = Image.open(os.path.join(self.root, "images", image_fname)).convert('RGB')
         if self.transform:
             image = self.transform(image)
 
