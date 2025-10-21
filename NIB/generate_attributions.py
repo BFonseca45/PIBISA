@@ -13,7 +13,7 @@ from torchvision.transforms.v2 import Compose, ToImage
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 
 # Project Imports
-from scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset
+from scripts.data import Flickr8kDataset, MSCXRDataset, MSCocoDataset, GPR1200Dataset
 from scripts.eval import metric_evaluation, metric_evaluation_vision
 from saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset", "ImageNetDataset"])
+    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCaptions", "MSCXRDataset", "MSCocoDataset", "ImageNetDataset", "GPR1200Dataset"])
     argparser.add_argument("--method", type=str, default="nib", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib"])
     argparser.add_argument("--beta", type=float, default=0.1)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     method = SALIENCY_METHODS[args.method]
 
     # Create dataset
-    if args.dataset == "GoogleAIConceptualCations":
+    if args.dataset == "GoogleAIConceptualCaptions":
         pass
 
     elif args.dataset == "ImageNetDataset":
@@ -131,6 +131,13 @@ if __name__ == "__main__":
     elif args.dataset == "MSCocoDataset":
         dataset = MSCocoDataset(
             split='val',
+            image_preprocessor=processor,
+            transform=Compose([ToImage()])
+        )
+    
+    elif args.dataset == "GPR1200Dataset":
+        dataset = GPR1200Dataset(
+            split=None, # We might want to change this to 'test' or 'val' depending on the use case
             image_preprocessor=processor,
             transform=Compose([ToImage()])
         )

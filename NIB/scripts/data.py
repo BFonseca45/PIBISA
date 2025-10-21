@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from PIL import Image
+import json
 
 # PyTorch Imports
 import torch
@@ -358,6 +359,104 @@ class MSCocoDataset(Dataset):
             "image":[i[2] for i in batch],
             "image_processed":torch.stack([i[3] for i in batch], dim=0),
             "captions":[i[4] for i in batch]
+        }
+        
+        return output
+
+
+
+# Class: GPR1200Dataset
+class GPR1200Dataset(Dataset):
+    
+    """
+    Website: https://visual-computing.com/projects/gpr1200-dataset
+
+    GitHub: https://github.com/Visual-Computing/GPR1200
+    """
+
+
+    # Method: __init__
+    def __init__(self, 
+                 root='/nas-ctm01/datasets/public/GPR1200',
+                 split=None,
+                 image_preprocessor=None, 
+                 transform=None):
+
+        assert image_preprocessor is not None, 'Please provide an image_preprocessor function'
+        # assert split in ('train', 'val', 'test'), 'Please provide a valid split (train, val, test)'
+
+        # Get the list of all imagens from the GPR1200 dataset
+        images_fnames = [i for i in os.listdir(os.path.join(root, 'images')) if not i.startswith('.')]
+
+        # Open JSON with GPR1200 annotations
+        with open(os.path.join(root, 'GPR1200_categoryNumber_to_text.json'), 'r') as f:
+            annotations_dict = json.load(f)
+
+        # Create a data dictionary with image filenames and annotations
+        data_dict = dict()
+
+        for img_fname in images_fnames:
+            label_id = img_fname.split('_')[0]
+            label_text = annotations_dict[str(label_id)]
+
+            data_dict[img_fname] = {
+                'label_id':label_id,
+                'label_text':label_text
+            }
+
+
+        self.image_fnames = images_fnames
+        self.data_dict = data_dict
+        self.image_preprocessor = image_preprocessor
+        self.transform = transform
+        self.root = root
+
+        return
+    
+
+    # Method: __len__
+    def __len__(self):
+        return len(self.image_fnames)
+    
+
+    # Method: __getitem__
+    def __getitem__(self, idx:int):
+
+        """
+        Args:
+            idx (int): Index
+
+        Returns:
+            dict: Dict(image, target). target is a list of captions for the image.
+        """
+
+        # Get image filename
+        image_fname = self.image_fnames[idx]
+
+        # Image
+        image = Image.open(os.path.join(self.root, image_fname)).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+
+        # Image processed (remove batch size)
+        image_processed = self.image_preprocessor(images=image, return_tensors="pt")['pixel_values'][0]
+
+        # Caption
+        label_id = self.data_dict[image_fname]['label_id']
+        label_text = self.data_dict[image_fname]['label_text']
+
+        return image_fname, image, image_processed, label_id, label_text
+
+
+    # Method: Collate function
+    def collate_fn(self, batch):
+
+        output = {
+            "image_fname":[i[0] for i in batch],
+            "image":[i[1] for i in batch],
+            "image_processed":torch.stack([i[2] for i in batch], dim=0),
+            "label_id":[i[3] for i in batch],
+            "label_text":[i[4] for i in batch]
         }
         
         return output
