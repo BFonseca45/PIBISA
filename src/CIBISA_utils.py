@@ -63,7 +63,7 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             if learnable_param:
                 loss_inf.reset_loss()
             
-            saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs)
+            saliency, hps, l = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs)
             final_saliency +=  saliency
             hyperparams.append(hps)
 
@@ -190,3 +190,27 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     # type: (Tensor, float, float, float, float) -> Tensor
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 # def log_beta_phi():
+
+def mutual_information(hgram):
+
+    """ 
+    
+    Mutual information for joint histogram
+
+    """
+
+    # Convert bins counts to probability values
+
+    pxy = hgram / float(np.sum(hgram))
+
+    px = np.sum(pxy, axis=1) # marginal for x over y
+
+    py = np.sum(pxy, axis=0) # marginal for y over x
+
+    px_py = px[:, None] * py[None, :] # Broadcast to multiply marginals
+
+    # Now we can do the calculation using the pxy, px_py 2D arrays
+
+    nzs = pxy > 0 # Only non-zero pxy values contribute to the sum
+
+    return np.sum(pxy[nzs] * np.log(pxy[nzs] / px_py[nzs]))

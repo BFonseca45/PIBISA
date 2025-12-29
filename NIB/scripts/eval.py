@@ -169,7 +169,6 @@ def get_metrics_vv(image_q_processed, image_q_feature, image_ret_processed, imag
 def metric_evaluation(model, device, images_processed, image_features, text_ids, text_features, saliency_v, saliency_t):
     all_results = []
     
-
     for image_processed,image_feature,text_id,text_feature,vmap,tmap in zip(images_processed,image_features,text_ids,text_features,saliency_v,saliency_t):
         image_processed = image_processed.unsqueeze(0).to(device)
         image_feature = image_feature.unsqueeze(0).to(device)

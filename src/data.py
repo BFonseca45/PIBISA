@@ -3,6 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 import urllib.request
+import glob
+
 from PIL import Image
 from tqdm import tqdm
 
@@ -250,3 +252,36 @@ class GoogleAIConceptualCations(Dataset):
         }
 
         return data_dict
+    
+class OxfordBuildings(Dataset):
+    def __init__(self, path, transform = None):                
+        self.transform = transform
+        self.ann_path = path + '/annotations/'
+        self.img_path = path + '/images/'
+        self.query_files = glob.glob('*query*', root_dir=self.ann_path)
+    
+    def __len__(self):
+        return len(self.query_files)
+    
+    def __getitem__(self, idx:int):
+        # Getting the query image
+        query_file = self.query_files[idx]
+        with open(self.ann_path + query_file, 'r') as file:
+            contentq = file.read()   
+        filename = contentq.split(' ')[0]
+        query_img = Image.open(self.img_path + filename.removeprefix('oxc1_') + '.jpg')
+        if self.transform:
+            query_img = self.transform(query_img)
+        
+        # Getting all the matched images
+        gt_list = []        
+        with open(self.ann_path + query_file.replace('query', 'good'), 'r') as file:
+            contentgt = file.read()   
+        
+        for gt_file in contentgt.split('\n')[:-1]:
+            gt_img = Image.open(self.img_path + gt_file + '.jpg')
+            if self.transform:
+                gt_img = self.transform(gt_img)
+            gt_list.append(gt_img)
+            
+        return query_img, gt_list

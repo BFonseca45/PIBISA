@@ -150,6 +150,7 @@ def total_variation(saliency):
 def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
     betas = []
     phis = []
+    opt_masks = []
 
     for i in range(epochs):
         opt.zero_grad()
@@ -157,6 +158,8 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
 
         loss = loss_ce(y_pred, y, flag) + loss_inf(model.get_saliency())
         loss.backward(retain_graph=True)
+        
+        opt_masks.append(model.get_saliency().detach().cpu().numpy())
 
         opt.step()
 
@@ -169,4 +172,4 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
     phis = np.array(phis).squeeze()
     phis = np.exp(-phis)
 
-    return model.get_saliency().detach().cpu().numpy(), [betas, phis]
+    return model.get_saliency().detach().cpu().numpy(), [betas, phis], opt_masks

@@ -4,7 +4,7 @@ import evaluate
 
 from transformers import AutoProcessor
 from tqdm import tqdm
-from src.utils import unnormalize
+from src.CIBISA_utils import unnormalize
 
 if torch.cuda.is_available():
     dev = "cuda:0"
@@ -147,3 +147,36 @@ def kl_div_uni(x1, x2):
     dkl = torch.log(std_x2/std_x1) + (std_x1**2 + (mu_x1 - mu_x2)**2)/(2*std_x2**2) - 0.5
 
     return dkl
+
+def create_sal_masks(saliency_list):
+    sl = np.array(saliency_list)
+    sl_mask = sl.copy()
+    threshold = np.percentile(sl.reshape(len(sl),-1),50, axis=-1)
+    
+    thresh_matrix = np.zeros_like(sl)    
+    for j,th in enumerate(threshold):
+        thresh_matrix[j,:,:] = th
+    
+    sl_mask[sl < thresh_matrix] = 0
+    sl_mask[sl > thresh_matrix] = 1
+    
+    sl_mask = torch.tensor(sl_mask, device=device)
+
+    return sl_mask.view((-1,1,224,224))
+
+def confidence_increase_drop(model, query, gts, saliency):
+    gts = torch.squeeze(torch.stack(gts))
+    sl_mask = create_sal_masks(saliency_list=saliency)    
+    
+    query_emb = model(query)
+    gts_emb = model(gts)
+    maks_emb = model(gts * sl_mask)
+
+    sim_ori = torch.nn.functional.cosine_similarity(query_emb, gts_emb)
+    sim_sal = torch.nn.functional.cosine_similarity(query_emb, maks_emb)
+
+    ci = torch.nn.functional.relu(sim_sal - sim_ori).bool()*1
+    cd = torch.nn.functional.relu(sim_ori - sim_sal)
+    cd = cd[cd.nonzero()]
+    
+    return ci, cd

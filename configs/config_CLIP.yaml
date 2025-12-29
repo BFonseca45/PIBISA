@@ -2,4 +2,4 @@ param:
   beta: 2
 run:
   server: True
-  method: 'M2IB'
+  method: 'rise'

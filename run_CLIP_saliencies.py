@@ -103,7 +103,7 @@ def run_main(cfg: DictConfig):
             y_target = model.get_text_features(text).to(device)
 
             p, _ = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, epochs=10, beta=2, return_negative=False, learnable_param=True)
-            n = generate_plot(x_pil,item,nib)
+            n = generate_plot(x_pil,item,rise)
             m = generate_plot(x_pil,item,m2ib)
 
             f, ax = plt.subplots(nrows=1, ncols=4, layout='constrained', sharex=True, figsize=(7,5), dpi=100)
