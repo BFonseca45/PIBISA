@@ -285,3 +285,30 @@ class OxfordBuildings(Dataset):
             gt_list.append(gt_img)
             
         return query_img, gt_list
+
+class ParisBuildings(OxfordBuildings):
+    def __init__(self, path, transform=None):
+        super().__init__(path, transform)
+        
+    def __getitem__(self, idx:int):
+        # Getting the query image
+        query_file = self.query_files[idx]
+        with open(self.ann_path + query_file, 'r') as file:
+            contentq = file.read()   
+        filename = contentq.split(' ')[0]
+        query_img = Image.open(self.img_path + filename + '.jpg')
+        if self.transform:
+            query_img = self.transform(query_img)
+        
+        # Getting all the matched images
+        gt_list = []        
+        with open(self.ann_path + query_file.replace('query', 'ok'), 'r') as file:
+            contentgt = file.read()   
+        
+        for gt_file in contentgt.split('\n')[:-1]:
+            gt_img = Image.open(self.img_path + gt_file + '.jpg')
+            if self.transform:
+                gt_img = self.transform(gt_img)
+            gt_list.append(gt_img)
+            
+        return query_img, gt_list
