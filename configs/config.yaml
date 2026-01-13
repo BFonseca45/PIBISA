@@ -3,4 +3,4 @@ param:
   learnable: True
 db:
   model: 'ResNET'
-  dataset_name: 'Oxford'
+  dataset_name: 'oxford'

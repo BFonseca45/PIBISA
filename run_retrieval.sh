@@ -1,11 +1,11 @@
 #!/bin/sh
-#SBATCH --job-name=retrieval_oxford
-#SBATCH --output=oxford_resnet.txt
-#SBATCH --error=oxford_resnet_err.txt
+#SBATCH --job-name=retrieval_paris
+#SBATCH --output=paris_resnet.txt
+#SBATCH --error=paris_resnet_err.txt
 #SBATCH --gres=gpu:1
 
 # do not forget to activate any environment here
 source ~/envs/pytorch/bin/activate
-python run_retrieval.py -m db.model='ResNET','VGG','ViT'
+python3 run_retrieval.py -m db.model='ResNET','VGG','ViT' db.dataset_name='paris'
 
 echo "Finished"

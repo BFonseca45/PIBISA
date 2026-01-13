@@ -165,10 +165,10 @@ def create_sal_masks(saliency_list):
     return sl_mask.view((-1,1,224,224))
 
 def confidence_increase_drop(model, query, gts, saliency):
-    gts = torch.squeeze(torch.stack(gts))
-    sl_mask = create_sal_masks(saliency_list=saliency)    
+    gts = torch.squeeze(torch.stack(gts)).to(device)
+    sl_mask = create_sal_masks(saliency_list=saliency).to(device)    
     
-    query_emb = model(query)
+    query_emb = model(query.to(device))
     gts_emb = model(gts)
     maks_emb = model(gts * sl_mask)
 
