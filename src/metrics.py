@@ -4,7 +4,7 @@ import evaluate
 
 from transformers import AutoProcessor
 from tqdm import tqdm
-from src.utils import unnormalize
+from src.CIBISA_utils import unnormalize
 
 if torch.cuda.is_available():
     dev = "cuda:0"

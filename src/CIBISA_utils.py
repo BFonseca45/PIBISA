@@ -16,7 +16,7 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
     # computing the target embedding
     k = 3*224*224
     with torch.enable_grad():
-        if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel':
+        if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel' or model._get_name() == 'CoCa':
             assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
             y_target = x_target
         else:
@@ -29,8 +29,10 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             y_flag = torch.ones(1, dtype=torch.long, device=device)
 
         # defining the bottleneck layer
-        ms = int(np.ceil(x.shape[-1]/32))
-        new_layer = InfoLayer(mask_range=3, mask_size=ms, input_size=x.shape[-1])
+        msw = int(np.ceil(x.shape[-2]/32))
+        msh = int(np.ceil(x.shape[-1]/32))
+        
+        new_layer = InfoLayer(mask_range=3, mask_size_w=msw, mask_size_h=msh, input_size_w=x.shape[-2], input_size_h=x.shape[-1])
         new_layer = new_layer.to(device=device)
 
         # placing the bottleneck in the target model
@@ -65,6 +67,65 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
             
             saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs)
             final_saliency +=  saliency
+            hyperparams.append(hps)
+
+        final_saliency = np.squeeze(final_saliency)
+        final_saliency = (final_saliency - np.min(final_saliency))/(np.max(final_saliency) - np.min(final_saliency))
+
+    return final_saliency, hyperparams
+
+def compute_saliency_text(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='cosine_sim', return_negative:bool=False, n_masks:int=20, epochs:int=15, beta:int=10, learnable_param=False) -> np.array:
+    # computing the target embedding
+    k = 3*224*224
+    with torch.enable_grad():
+        
+        y_target = model.get_image_features(x_target)
+
+        # setting the flag for computing positive/negative relations
+        if return_negative:
+            y_flag = -torch.ones(1, dtype=torch.long, device=device)
+        else:
+            y_flag = torch.ones(1, dtype=torch.long, device=device)
+
+        # defining the bottleneck layer
+        # defining the bottleneck layer
+        msw = int(np.ceil(x.shape[-1]))
+        msh = int(np.ceil(512/32))
+        new_layer = InfoLayer(mask_range=3, mask_size_w=msw, mask_size_h=msh, input_size_w=x.shape[-1], input_size_h=512)
+        new_layer = new_layer.to(device=device)
+
+        # placing the bottleneck in the target model
+        new_core = InfoModel_text(core=model, bottleneck=new_layer)
+        new_core = new_core.to(device=device)
+
+        # losses and parameters
+        P = list(new_core.parameters())
+
+        if learnable_param:
+            loss_inf = InfoLoss(learnable_param=learnable_param).to(device)
+            loss_sim = SimilarityLoss(mode=loss_mode, sigma=1, learnable_param=False).to(device)
+
+            P.extend(list(loss_inf.parameters()))
+            P.extend(list(loss_sim.parameters()))
+
+            optimizer = torch.optim.Adam(P, lr=1)
+
+        else:
+            loss_inf = InfoLoss(beta=beta/k, phi=1/k).to(device)
+            loss_sim = SimilarityLoss(mode=loss_mode, sigma=1).to(device)
+            optimizer = torch.optim.Adam(P, lr=1)
+            
+        # computing the saliency
+        final_saliency = 0
+        hyperparams = []
+        for _ in range(n_masks):
+            new_core.reset_model()
+
+            if learnable_param:
+                loss_inf.reset_loss()
+            
+            saliency, hps = train_bottleneck(model=new_core, x=x, y=y_target, flag=y_flag, loss_ce=loss_sim, loss_inf=loss_inf, opt=optimizer, epochs=epochs)
+            final_saliency += saliency
             hyperparams.append(hps)
 
         final_saliency = np.squeeze(final_saliency)
