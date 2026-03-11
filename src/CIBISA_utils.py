@@ -203,13 +203,16 @@ def decode_imagenet(preds:torch.tensor):
 
     return decoded_labels
 
-def unnormalize(x:torch.Tensor):
+def unnormalize(x:torch.Tensor, toPIL=True):
     invTrans = torchvision.transforms.Compose([
         torchvision.transforms.Normalize(mean=[0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
         torchvision.transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.])
     ])
     x = invTrans(x)
-    return torchvision.transforms.functional.to_pil_image(torch.squeeze(x))
+    if toPIL:
+        return torchvision.transforms.functional.to_pil_image(torch.squeeze(x))
+    else:
+        return x
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW

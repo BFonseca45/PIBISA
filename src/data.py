@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import urllib.request
 import glob
+import torch
+import torchvision
 
 from pathlib import Path
 from dataclasses import dataclass
@@ -46,8 +48,8 @@ class Flickr8kDataset(Dataset):
         self.transform = transform
 
         return
-    
-    
+
+
     # Method: Get a dictionary of annotations
     def annotations_to_dict(self, annotations_df):
         image_ids_dict = dict()
@@ -58,7 +60,7 @@ class Flickr8kDataset(Dataset):
         for image_id, image in enumerate(images_unique):
             image_ids_dict[image_id] = image
             annotations_dict[image] = list()
-        
+
         # Populate dictionary
         for _, row in annotations_df.iterrows():
             image = row['image']
@@ -111,9 +113,9 @@ class Flickr8kDataset(Dataset):
 
 # Class: Google AI Conceptual Captions Dataset
 class GoogleAIConceptualCations(Dataset):
-    
+
     """
-    
+
     Website: https://ai.google.com/research/ConceptualCaptions/download
     GitHub: https://github.com/google-research-datasets/conceptual-captions
 
@@ -138,12 +140,12 @@ class GoogleAIConceptualCations(Dataset):
             self.download_image_labels_data(image_labels_df=image_train_labels)
         train_labels_images = pd.read_csv(os.path.join(root, 'image_train_labels_gcc_complete.tsv'), sep='\t')
 
-        
+
         # Open Train/Validation TSV
         captions_cols_names = ['image_caption', 'image_url']
         captions_train = pd.read_csv(os.path.join(root, "Train_GCC-training.tsv"), sep='\t', header=None, names=captions_cols_names)
         captions_val = pd.read_csv(os.path.join(root, "Validation_GCC-1.1.0-Validation.tsv"), sep='\t', header=None, names=captions_cols_names)
-        
+
         if split == 'train':
             if not os.path.exists(os.path.join(root, 'train_gcc_complete.tsv')):
                 self.download_captions_data(captions_df=captions_train, split='train')
@@ -157,7 +159,7 @@ class GoogleAIConceptualCations(Dataset):
         self.transform = transform
 
         return
-    
+
 
     # Method: Download image labels data
     def download_image_labels_data(self, image_labels_df):
@@ -176,14 +178,14 @@ class GoogleAIConceptualCations(Dataset):
             try:
                 # Get image data
                 urllib.request.urlretrieve(
-                    url=url, 
+                    url=url,
                     filename=os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')
                 )
                 Image.open(os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')).convert('RGB')
                 image_fname[idx] = os.path.join(self.root, 'images', 'labels_subset', 'train', f'image_idx{idx}.jpg')
             except:
                 image_fname[idx] = None
-        
+
         # Save this into a new TSV file
         labels_dict['image_fname'] = image_fname
 
@@ -214,14 +216,14 @@ class GoogleAIConceptualCations(Dataset):
             try:
                 # Get image data
                 urllib.request.urlretrieve(
-                    url=url, 
+                    url=url,
                     filename=os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')
                 )
                 Image.open(os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')).convert('RGB')
                 image_fname[idx] = os.path.join(self.root, 'images', 'captions_subset', split, f'image_idx{idx}.jpg')
             except:
                 image_fname[idx] = None
-        
+
         # Create final dictionary
         captions_dict['image_fname'] = image_fname
 
@@ -247,7 +249,7 @@ class GoogleAIConceptualCations(Dataset):
         image_url = self.captions_images['image_url'].iloc[idx]
         image_fname = self.captions_images['image_fname'].iloc[idx]
 
-        
+
         # Open image
         image = Image.open(image_fname).convert('RGB')
 
@@ -259,67 +261,67 @@ class GoogleAIConceptualCations(Dataset):
         }
 
         return data_dict
-    
+
 class OxfordBuildings(Dataset):
-    def __init__(self, path, transform = None):                
+    def __init__(self, path, transform = None):
         self.transform = transform
         self.ann_path = path + '/annotations/'
         self.img_path = path + '/images/'
         self.query_files = glob.glob('*query*', root_dir=self.ann_path)
-    
+
     def __len__(self):
         return len(self.query_files)
-    
+
     def __getitem__(self, idx:int):
         # Getting the query image
         query_file = self.query_files[idx]
         with open(self.ann_path + query_file, 'r') as file:
-            contentq = file.read()   
+            contentq = file.read()
         filename = contentq.split(' ')[0]
         query_img = Image.open(self.img_path + filename.removeprefix('oxc1_') + '.jpg')
         if self.transform:
             query_img = self.transform(query_img)
-        
+
         # Getting all the matched images
-        gt_list = []        
+        gt_list = []
         with open(self.ann_path + query_file.replace('query', 'good'), 'r') as file:
-            contentgt = file.read()   
-        
+            contentgt = file.read()
+
         for gt_file in contentgt.split('\n')[:-1]:
             gt_img = Image.open(self.img_path + gt_file + '.jpg')
             if self.transform:
                 gt_img = self.transform(gt_img)
             gt_list.append(gt_img)
-            
+
         return query_img, gt_list
 
 class ParisBuildings(OxfordBuildings):
     def __init__(self, path, transform=None):
         super().__init__(path, transform)
-        
+
     def __getitem__(self, idx:int):
         # Getting the query image
         query_file = self.query_files[idx]
         with open(self.ann_path + query_file, 'r') as file:
-            contentq = file.read()   
+            contentq = file.read()
         filename = contentq.split(' ')[0]
         query_img = Image.open(self.img_path + filename + '.jpg')
         if self.transform:
             query_img = self.transform(query_img)
-        
+
         # Getting all the matched images
-        gt_list = []        
+        gt_list = []
         with open(self.ann_path + query_file.replace('query', 'ok'), 'r') as file:
-            contentgt = file.read()   
-        
+            contentgt = file.read()
+
         for gt_file in contentgt.split('\n')[:-1]:
             gt_img = Image.open(self.img_path + gt_file + '.jpg')
             if self.transform:
                 gt_img = self.transform(gt_img)
             gt_list.append(gt_img)
-            
+
         return query_img, gt_list
-    
+
 @dataclass
 class ImageSample:
     index: int
@@ -340,7 +342,7 @@ class InstreDataset(Dataset):
         self.by_subset = defaultdict(list)
         for idx, s in enumerate(self.samples):
             self.by_subset[s.subset].append(idx)
-            
+
         self.transform = transform
         self.crop_mode = crop_mode
         self.rng = random.Random(seed)
@@ -358,7 +360,7 @@ class InstreDataset(Dataset):
             img = self.transform(img)
 
         ridx = self.sample_same_subset(anchor_idx=idx, k=5)
-        
+
         for i in ridx:
             sr = self.samples[i]
             rimg = Image.open(sr.image_path).convert("RGB")
@@ -366,10 +368,10 @@ class InstreDataset(Dataset):
             if self.transform:
                 rimg = self.transform(rimg)
             rimg_list.append(rimg)
-            
-            
+
+
         return img, rimg_list
-    
+
     def _load_samples(self, csv_path: str, base_dir: str, max_boxes: int) -> List[ImageSample]:
         base_dir = Path(base_dir)
         samples = []
@@ -399,7 +401,7 @@ class InstreDataset(Dataset):
                 )
             )
         return samples
-    
+
     def sample_same_subset(self, anchor_idx: int, k: int, include_anchor: bool = True) -> List[int]:
         subset = self.samples[anchor_idx].subset
         pool = self.by_subset.get(subset, [])
@@ -408,7 +410,7 @@ class InstreDataset(Dataset):
         if not pool:
             return []
         return pool if k >= len(pool) else self.rng.sample(pool, k)
-    
+
     def _crop_image(self, img: Image.Image, bboxes: List[Tuple[int, int, int, int]]) -> Image.Image:
         if not bboxes or self.crop_mode == "none":
             return img
@@ -420,5 +422,33 @@ class InstreDataset(Dataset):
             y1 = min(b[1] for b in bboxes)
             x2 = max(b[0] + b[2] for b in bboxes)
             y2 = max(b[1] + b[3] for b in bboxes)
-            return img.crop((x1, y1, x2, y2))   
+            return img.crop((x1, y1, x2, y2))
         return img
+
+class ImageNETs(Dataset):
+    def __init__(self, path, split, transform):
+        self.files = glob.glob(os.path.join(path, split, "**", "*.JPEG"))
+        self.transform = transform
+        self.split = split
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, key):
+        img = Image.open(self.files[key])
+        msk_path = self.files[key].replace(self.split, self.split + "-segmentation").replace("JPEG", "png")
+        msk = Image.open(msk_path)
+
+        if self.transform:
+            img = self.transform(img)
+            _,w,h = img.shape
+            msk = self._preprocess_mask(mask=msk, width=w, height=h)
+
+        return img, msk
+
+    def _preprocess_mask(self, mask, width, height):
+        mask = torchvision.transforms.functional.resize(mask, (width,height))
+        mask = torchvision.transforms.functional.to_tensor(mask)
+        mask = torch.sum(torch.squeeze(mask), axis=0)
+        mask = (mask > 0)*1
+        return mask
