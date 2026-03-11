@@ -1,12 +1,14 @@
 import torch
 import torchvision
 import hydra
+import pickle
 
 from src.data import * 
 from src.CIBISA_utils import *
 from src.CIBISA import *
 from src.models import *
 from src.metrics import create_sal_masks, confidence_increase_drop
+from src.ret_methods import compute_sbsm
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 
@@ -14,6 +16,8 @@ from omegaconf import DictConfig, OmegaConf
 def run_main(cfg: DictConfig):
     # Passing config to variables
     print(cfg)
+    savefile = cfg.param.method + '_' + cfg.db.model + '_' + cfg.db.dataset_name + '.pkl'
+    print(savefile)
     
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -42,6 +46,14 @@ def run_main(cfg: DictConfig):
         dataset = OxfordBuildings(path='/home/up202204320/datasets/oxford/', transform=transform)
     elif cfg.db.dataset_name == 'paris':
         dataset = ParisBuildings(path='/home/up202204320/datasets/paris/', transform=transform)
+    elif cfg.db.dataset_name == 'instre':
+        base_dir = "/home/up202204320/datasets/"
+        crop_mode = "union"
+        max_boxes = 2
+        seed = 42
+        subset_name = "INSTRE-S1"
+        csv_path = f"/home/up202204320/datasets/INSTRE/csv/{subset_name}.csv"
+        dataset = InstreDataset(csv_path, base_dir, crop_mode=crop_mode, max_boxes=max_boxes, seed=seed, transform=transform)
         
     dloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False)
 
@@ -51,7 +63,10 @@ def run_main(cfg: DictConfig):
     for q, gt in tqdm(dloader):    
         sal_list = []
         for j in range(len(gt)): 
-            s,_ = compute_saliency(x=gt[j].to(device), x_target=q.to(device), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
+            if cfg.param.method == 'PIBISA':
+                s,_ = compute_saliency(x=gt[j].to(device), x_target=q.to(device), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
+            elif cfg.param.method == 'SBSM':
+                s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=model)
             sal_list.append(s)
         
         if len(gt) > 5:
@@ -64,7 +79,7 @@ def run_main(cfg: DictConfig):
                 ax[i].imshow(unnormalize(gt[i]))
                 ax[i].imshow(sal_list[i-1], cmap='turbo', alpha=0.4)
                 ax[i].axis('off')
-            filename = './out/' + cfg.db.dataset_name + '/sal' + str(idx) + cfg.db.model + '.png'
+            filename = './out/' + cfg.param.method + '/' + cfg.db.dataset_name + '/sal' + str(idx) + cfg.db.model + '.png'
             plt.savefig(filename, bbox_inches='tight')
             plt.close()
             
@@ -74,6 +89,12 @@ def run_main(cfg: DictConfig):
         cd_list.extend(cd.detach().cpu().numpy())
         
         idx = idx+1
+        
+        if not(idx%100):            
+            tosave = {'CI':np.mean(ci_list)*100, 'CD':np.mean(cd_list)}
+            open_file = open(savefile, 'wb')
+            pickle.dump(tosave, open_file)
+            open_file.close()
 
     print("Confidence Increase: ", np.mean(ci_list)*100)
     print("Confidence Drop: ", np.mean(cd_list))

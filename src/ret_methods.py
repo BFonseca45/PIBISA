@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from captum.attr import IntegratedGradients
+# from captum.attr import IntegratedGradients
 
 def compute_sbsm(query_tensor, neighbor_tensor, model, block_size=24, stride=12):
     """
@@ -79,70 +79,70 @@ def compute_sbsm(query_tensor, neighbor_tensor, model, block_size=24, stride=12)
 
     return saliency
 
-def compute_integrated_gradients(model, query_tensor, neighbor_tensor, baseline=None, steps=50):
-    """
-    Compute IG attributions using L2 distance (consistent with retrieval).
-    """
-    if baseline is None:
-        baseline = 0 * neighbor_tensor  # Black image baseline
+# def compute_integrated_gradients(model, query_tensor, neighbor_tensor, baseline=None, steps=50):
+#     """
+#     Compute IG attributions using L2 distance (consistent with retrieval).
+#     """
+#     if baseline is None:
+#         baseline = 0 * neighbor_tensor  # Black image baseline
     
-    # Ensure tensors require gradients
-    neighbor_tensor = neighbor_tensor.clone().requires_grad_(True)
-    query_tensor = query_tensor.clone().requires_grad_(True)
+#     # Ensure tensors require gradients
+#     neighbor_tensor = neighbor_tensor.clone().requires_grad_(True)
+#     query_tensor = query_tensor.clone().requires_grad_(True)
     
-    def similarity_fn(neighbor_input):
-        # Ensure we're in training mode for gradient computation
-        original_mode = model.training
-        model.train()
+#     def similarity_fn(neighbor_input):
+#         # Ensure we're in training mode for gradient computation
+#         original_mode = model.training
+#         model.train()
         
-        try:
-            # Handle ensemble models
-            if hasattr(model, 'models') and isinstance(model.models, list):
-                # Ensure each model is in training mode
-                for m in model.models:
-                    m.train()
-                query_embed = torch.mean(torch.stack([m(query_tensor) for m in model.models]), dim=0)
-            else:
-                model.train()
-                query_embed = model(query_tensor)
+#         try:
+#             # Handle ensemble models
+#             if hasattr(model, 'models') and isinstance(model.models, list):
+#                 # Ensure each model is in training mode
+#                 for m in model.models:
+#                     m.train()
+#                 query_embed = torch.mean(torch.stack([m(query_tensor) for m in model.models]), dim=0)
+#             else:
+#                 model.train()
+#                 query_embed = model(query_tensor)
                 
-            # Handle ensemble models for neighbor
-            if hasattr(model, 'models') and isinstance(model.models, list):
-                neighbor_embed = torch.mean(torch.stack([m(neighbor_input) for m in model.models]), dim=0)
-            else:
-                neighbor_embed = model(neighbor_input)
+#             # Handle ensemble models for neighbor
+#             if hasattr(model, 'models') and isinstance(model.models, list):
+#                 neighbor_embed = torch.mean(torch.stack([m(neighbor_input) for m in model.models]), dim=0)
+#             else:
+#                 neighbor_embed = model(neighbor_input)
                 
-            # Compute similarity (negative distance for maximization)
-            similarity = -torch.norm(query_embed - neighbor_embed, p=2)
+#             # Compute similarity (negative distance for maximization)
+#             similarity = -torch.norm(query_embed - neighbor_embed, p=2)
             
-            return similarity.unsqueeze(0)
+#             return similarity.unsqueeze(0)
             
-        finally:
-            # Restore original mode
-            if hasattr(model, 'models') and isinstance(model.models, list):
-                for m in model.models:
-                    m.train(original_mode)
-            else:
-                model.train(original_mode)
+#         finally:
+#             # Restore original mode
+#             if hasattr(model, 'models') and isinstance(model.models, list):
+#                 for m in model.models:
+#                     m.train(original_mode)
+#             else:
+#                 model.train(original_mode)
     
-    ig = IntegratedGradients(similarity_fn)
+#     ig = IntegratedGradients(similarity_fn)
     
-    # Stable attribution computation
-    attributions = ig.attribute(
-        inputs=neighbor_tensor,
-        baselines=baseline,
-        n_steps=steps,
-        internal_batch_size=1,
-        return_convergence_delta=False
-    )
+#     # Stable attribution computation
+#     attributions = ig.attribute(
+#         inputs=neighbor_tensor,
+#         baselines=baseline,
+#         n_steps=steps,
+#         internal_batch_size=1,
+#         return_convergence_delta=False
+#     )
     
-    return attributions
+#     return attributions
 
-def process_ig_to_heatmap(attributions):
-    """Convert IG attributions to heatmap"""
-    attr_np = attributions.detach().cpu().squeeze().numpy()
-    if attr_np.ndim == 3:
-        attr_np = np.mean(attr_np, axis=0)
-    attr_np = (attr_np - attr_np.mean()) / (attr_np.std() + 1e-8)
-    attr_np = np.clip(attr_np, -3, 3)
-    return (attr_np - attr_np.min()) / (attr_np.max() - attr_np.min() + 1e-8)
+# def process_ig_to_heatmap(attributions):
+#     """Convert IG attributions to heatmap"""
+#     attr_np = attributions.detach().cpu().squeeze().numpy()
+#     if attr_np.ndim == 3:
+#         attr_np = np.mean(attr_np, axis=0)
+#     attr_np = (attr_np - attr_np.mean()) / (attr_np.std() + 1e-8)
+#     attr_np = np.clip(attr_np, -3, 3)
+#     return (attr_np - attr_np.min()) / (attr_np.max() - attr_np.min() + 1e-8)

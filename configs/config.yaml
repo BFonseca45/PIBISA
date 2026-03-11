@@ -1,6 +1,7 @@
 param:
   beta: 10
   learnable: True
+  method: 'PIBISA'
 db:
   model: 'ResNET'
   dataset_name: 'oxford'

@@ -328,7 +328,7 @@ class ImageSample:
     bboxes: List[Tuple[int, int, int, int]]
 
 class InstreDataset(Dataset):
-    def __init__(self, csv_path: str, base_dir: str, max_boxes: int, transform=None, crop_mode: str = "none", seed: int = 0):
+    def __init__(self, csv_path: str, base_dir: str, max_boxes: int, transform=None, crop_mode: str = "bbox1", seed: int = 0, k: int = 6):
         """
         Args:
             samples: list of ImageSample objects
@@ -344,6 +344,7 @@ class InstreDataset(Dataset):
         self.transform = transform
         self.crop_mode = crop_mode
         self.rng = random.Random(seed)
+        self.k = k
 
     def __len__(self):
         return len(self.samples)
@@ -357,12 +358,12 @@ class InstreDataset(Dataset):
         if self.transform:
             img = self.transform(img)
 
-        ridx = self.sample_same_subset(anchor_idx=idx, k=5)
+        ridx = self.sample_same_subset(anchor_idx=idx, k=self.k)
         
         for i in ridx:
             sr = self.samples[i]
             rimg = Image.open(sr.image_path).convert("RGB")
-            rimg = self._crop_image(rimg, sr.bboxes)
+            # rimg = self._crop_image(rimg, sr.bboxes)
             if self.transform:
                 rimg = self.transform(rimg)
             rimg_list.append(rimg)
