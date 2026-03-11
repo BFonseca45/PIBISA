@@ -10,7 +10,7 @@ import wandb
 warnings.filterwarnings('ignore')
 
 from PIL import Image
-from src.utils import *
+from src.CIBISA_utils import *
 from src.metrics import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
@@ -130,6 +130,8 @@ def run_main(cfg: DictConfig):
             sal = sal.detach().cpu().numpy()
         elif method == 'PIBISA':
             sal,_ = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, beta=beta, return_negative=False)
+        elif method == 'PIBISA_ENC':
+            sal,_ = compute_saliency(x=x, x_target=model.get_image_features(x), model=model, n_masks=20, beta=beta, return_negative=False)
         elif method == 'M2IB':
             sal = generate_plot(x_pil,target_caption,nib)
         elif method == 'NIB':

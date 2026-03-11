@@ -126,6 +126,7 @@ class QuantusLocalisation(QuantusMetrics):
             "TopKIntersection",
             "RelevanceRankAccuracy",
             "RelevanceMassAccuracy",
+            "Focus",
             "AUC"
         ), f"Invalid metric name: {metric_name}"
 
@@ -146,8 +147,8 @@ class QuantusLocalisation(QuantusMetrics):
 
 
     # Method: Compute the metric for a batch of data
-    def compute_metric(self, model, x_batch, y_batch, a_batch, device):
-        score = self.metric(model=model, x=x_batch, y=y_batch, a=a_batch, device=device)
+    def compute_metric(self, model, x_batch, y_batch, a_batch, s_batch, device):
+        score = self.metric(model=model, x_batch=x_batch, y_batch=y_batch, a_batch=a_batch, s_batch=s_batch, device=device)
         return score
 
 

@@ -2,6 +2,6 @@
 
 echo "Running metrics"
 
-python run_metricsCLIP.py run.server=False
+python3 generate_attributions.py --dataset Flickr8kDataset --beta=1 --learn=True> Flicker_beta_learn.out 
 
 echo "Finished"

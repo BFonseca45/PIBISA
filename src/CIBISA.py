@@ -2,6 +2,7 @@ import random
 import torch
 import torch.nn as nn
 import numpy as np
+import copy
 
 random.seed(32984)
 torch.manual_seed(2234)
@@ -22,7 +23,7 @@ class InfoModel(nn.Module):
 
     def forward(self, x):
         x = self.botteneck(x)
-        if self.core._get_name() == 'CLIP':
+        if self.core._get_name() == 'CLIP' or self.core._get_name() == 'CoCa':
             y = self.core.encode_image(x)
         elif self.core._get_name() == 'CLIPModel':
             y = self.core.get_image_features(x)
@@ -41,21 +42,49 @@ class InfoModel(nn.Module):
 
     def get_activations(self):
         return self.activations.detach()
+    
+class InfoModel_text(nn.Module):
+    def __init__(self, core, bottleneck):
+        super(InfoModel_text, self).__init__()
+        self.core = core                
+        for parameter in self.core.parameters():
+            parameter.requires_grad = False
+
+        self.botteneck = bottleneck
+        self.model = copy.deepcopy(self.core)        
+
+    def forward(self, x):        
+        self.model.text_model.embeddings.token_embedding.weight.data[x,:] = self.botteneck(self.core.text_model.embeddings.token_embedding.weight.data[x,:])
+        return self.model.get_text_features(x)
+
+    def get_saliency(self):
+        return self.botteneck.get_lamb()
+
+    def reset_model(self):
+        self.botteneck.reset_alpha()
+
+    def activations_hook(self, module, inputs, act):
+        self.activations = act
+
+    def get_activations(self):
+        return self.activations.detach()
 
 class InfoLayer(nn.Module):
-    def __init__(self, input_size, mask_size, mask_range):
+    def __init__(self, input_size_w, input_size_h, mask_size_w, mask_size_h, mask_range):
         super(InfoLayer, self).__init__()
 
-        self.input_size = input_size
-        self.mask_size = mask_size
+        self.input_size_w = input_size_w
+        self.input_size_h = input_size_h
+        self.mask_size_w = mask_size_w
+        self.mask_size_h = mask_size_h
         self.mask_range = mask_range
 
-        self.alpha = nn.Parameter(torch.empty((self.mask_size, self.mask_size), dtype=torch.float32))
+        self.alpha = nn.Parameter(torch.empty((self.mask_size_w, self.mask_size_h), dtype=torch.float32))
         self.reset_alpha()
 
     def forward(self, x):
-        alpha_ex = self.alpha.expand((1, 1, self.mask_size, self.mask_size))
-        alpha_ex = nn.Upsample(size=(self.input_size, self.input_size), mode='bicubic')(alpha_ex)
+        alpha_ex = self.alpha.expand((1, 1, self.mask_size_w, self.mask_size_h))
+        alpha_ex = nn.Upsample(size=(self.input_size_w, self.input_size_h), mode='bicubic')(alpha_ex)
         self.lamb = torch.sigmoid(alpha_ex)
 
         return torch.mul(x, self.lamb)
@@ -163,13 +192,14 @@ def train_bottleneck(model, x, y, flag, epochs, loss_ce, loss_inf, opt):
 
         opt.step()
 
-        betas.extend(loss_inf.beta.clone().detach().cpu().numpy())
-        phis.extend(loss_inf.phi.clone().detach().cpu().numpy())
+        # print(loss)
+    #     betas.extend(loss_inf.beta.clone().detach().cpu().numpy())
+    #     phis.extend(loss_inf.phi.clone().detach().cpu().numpy())
 
-    betas = np.array(betas).squeeze()
-    betas = np.exp(-betas)
+    # betas = np.array(betas).squeeze()
+    # betas = np.exp(-betas)
 
-    phis = np.array(phis).squeeze()
-    phis = np.exp(-phis)
+    # phis = np.array(phis).squeeze()
+    # phis = np.exp(-phis)
 
     return model.get_saliency().detach().cpu().numpy(), [betas, phis], opt_masks

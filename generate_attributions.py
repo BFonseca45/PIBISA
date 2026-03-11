@@ -37,7 +37,8 @@ SALIENCY_METHODS = {
     "rise":rise, 
     "m2ib":m2ib, 
     "nib":nib, 
-    "cibisa":"cibisa"    
+    "cibisa":"cibisa",
+    "cibisa_enc":"cibisa_enc"    
 }
 
 # Function: Min-Max Normalization
@@ -78,7 +79,7 @@ if __name__ == "__main__":
     # Command Line Interface
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--dataset", type=str, default="MSCocoDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
-    argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa"])
+    argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa", "cibisa_enc"])
     argparser.add_argument("--beta", type=float, default=2)
     argparser.add_argument("--learn", type=bool, default=False)
     argparser.add_argument("--num_steps", type=int, default=10)
@@ -173,18 +174,6 @@ if __name__ == "__main__":
         # exit()
 
         # Special Case: Flickr8kDataset has several captions for the same image
-        if isinstance(dataloader.dataset, (Flickr8kDataset, torchvision.datasets.CocoCaptions)):
-            with torch.no_grad():
-                new_caption = []
-                for cp in caption:
-                    tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
-                    tf = [model.get_text_features(t) for t in tids]
-                    tf = torch.cat(tf, dim=0)
-                    im_features = model.get_image_features(batch_xs.to(device))[0]
-                    prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
-                    new_caption.append(cp[prob.argmax().item()])
-                caption = new_caption
-        # Special Case: Flickr8kDataset has several captions for the same image
         if isinstance(dataset, Flickr8kDataset) or isinstance(dataset, MSCocoDataset):
             with torch.no_grad():
                 new_caption = []
@@ -231,19 +220,21 @@ if __name__ == "__main__":
             v_saliency, _ = compute_saliency(x=image_processed, x_target=tf, model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=args.learn)
             v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
             t_saliency = 0
+        elif args.method in ['cibisa_enc']:
+            v_saliency, _ = compute_saliency(x=image_processed, x_target=model.get_image_features(image_processed), model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=False)
+            v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
+            t_saliency = 0
         else:
             v_saliency, t_saliency = method(model, tid, image_processed)
         
-        image_fnames.append(image_fname)
+        # image_fnames.append(image_fname)
         image_saliency.append(v_saliency)
         text_features.extend(tf.detach().cpu())
         images_processed.append(image_processed.cpu())
         image_features.append(im_f)
         text_ids.extend(tid)
-
-
-    # Prepare data
-    image_fnames = np.concatenate(image_fnames, axis=0)
+    
+    # image_fnames = np.concatenate(image_fnames, axis=0)
     image_saliency = np.concatenate(image_saliency, axis=0)
     text_features = torch.stack(text_features, dim=0)
     images_processed = torch.cat(images_processed, dim=0)
