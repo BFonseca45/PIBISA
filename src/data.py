@@ -1,8 +1,17 @@
 # Imports
 import os
+import csv
+import random
 import numpy as np
 import pandas as pd
 import urllib.request
+import glob
+
+from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Tuple
+from collections import defaultdict
+
 from PIL import Image
 from tqdm import tqdm
 
@@ -250,3 +259,166 @@ class GoogleAIConceptualCations(Dataset):
         }
 
         return data_dict
+    
+class OxfordBuildings(Dataset):
+    def __init__(self, path, transform = None):                
+        self.transform = transform
+        self.ann_path = path + '/annotations/'
+        self.img_path = path + '/images/'
+        self.query_files = glob.glob('*query*', root_dir=self.ann_path)
+    
+    def __len__(self):
+        return len(self.query_files)
+    
+    def __getitem__(self, idx:int):
+        # Getting the query image
+        query_file = self.query_files[idx]
+        with open(self.ann_path + query_file, 'r') as file:
+            contentq = file.read()   
+        filename = contentq.split(' ')[0]
+        query_img = Image.open(self.img_path + filename.removeprefix('oxc1_') + '.jpg')
+        if self.transform:
+            query_img = self.transform(query_img)
+        
+        # Getting all the matched images
+        gt_list = []        
+        with open(self.ann_path + query_file.replace('query', 'good'), 'r') as file:
+            contentgt = file.read()   
+        
+        for gt_file in contentgt.split('\n')[:-1]:
+            gt_img = Image.open(self.img_path + gt_file + '.jpg')
+            if self.transform:
+                gt_img = self.transform(gt_img)
+            gt_list.append(gt_img)
+            
+        return query_img, gt_list
+
+class ParisBuildings(OxfordBuildings):
+    def __init__(self, path, transform=None):
+        super().__init__(path, transform)
+        
+    def __getitem__(self, idx:int):
+        # Getting the query image
+        query_file = self.query_files[idx]
+        with open(self.ann_path + query_file, 'r') as file:
+            contentq = file.read()   
+        filename = contentq.split(' ')[0]
+        query_img = Image.open(self.img_path + filename + '.jpg')
+        if self.transform:
+            query_img = self.transform(query_img)
+        
+        # Getting all the matched images
+        gt_list = []        
+        with open(self.ann_path + query_file.replace('query', 'ok'), 'r') as file:
+            contentgt = file.read()   
+        
+        for gt_file in contentgt.split('\n')[:-1]:
+            gt_img = Image.open(self.img_path + gt_file + '.jpg')
+            if self.transform:
+                gt_img = self.transform(gt_img)
+            gt_list.append(gt_img)
+            
+        return query_img, gt_list
+    
+@dataclass
+class ImageSample:
+    index: int
+    subset: str
+    image_path: Path
+    bboxes: List[Tuple[int, int, int, int]]
+
+class InstreDataset(Dataset):
+    def __init__(self, csv_path: str, base_dir: str, max_boxes: int, transform=None, crop_mode: str = "none", seed: int = 0):
+        """
+        Args:
+            samples: list of ImageSample objects
+            transform: optional torchvision transform
+            crop_mode: "none", "bbox1", "union"
+        """
+        self.samples = self._load_samples(csv_path, base_dir, max_boxes)
+        # Organize by subset for fast retrieval
+        self.by_subset = defaultdict(list)
+        for idx, s in enumerate(self.samples):
+            self.by_subset[s.subset].append(idx)
+            
+        self.transform = transform
+        self.crop_mode = crop_mode
+        self.rng = random.Random(seed)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx: int):
+        rimg_list = []
+        s = self.samples[idx]
+        img = Image.open(s.image_path).convert("RGB")
+        img = self._crop_image(img, s.bboxes)
+
+        if self.transform:
+            img = self.transform(img)
+
+        ridx = self.sample_same_subset(anchor_idx=idx, k=5)
+        
+        for i in ridx:
+            sr = self.samples[i]
+            rimg = Image.open(sr.image_path).convert("RGB")
+            rimg = self._crop_image(rimg, sr.bboxes)
+            if self.transform:
+                rimg = self.transform(rimg)
+            rimg_list.append(rimg)
+            
+            
+        return img, rimg_list
+    
+    def _load_samples(self, csv_path: str, base_dir: str, max_boxes: int) -> List[ImageSample]:
+        base_dir = Path(base_dir)
+        samples = []
+
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+
+        for idx, row in enumerate(rows):
+            bboxes = []
+            for i in range(1, max_boxes + 1):
+                try:
+                    x = int(row[f"bbox{i}_x"])
+                    y = int(row[f"bbox{i}_y"])
+                    w = int(row[f"bbox{i}_w"])
+                    h = int(row[f"bbox{i}_h"])
+                    if w > 0 and h > 0:
+                        bboxes.append((x, y, w, h))
+                except Exception:
+                    continue
+
+            samples.append(
+                ImageSample(
+                    index=idx,
+                    subset=row["subset"],
+                    image_path=base_dir / row["image_path"],
+                    bboxes=bboxes,
+                )
+            )
+        return samples
+    
+    def sample_same_subset(self, anchor_idx: int, k: int, include_anchor: bool = True) -> List[int]:
+        subset = self.samples[anchor_idx].subset
+        pool = self.by_subset.get(subset, [])
+        if not include_anchor:
+            pool = [i for i in pool if i != anchor_idx]
+        if not pool:
+            return []
+        return pool if k >= len(pool) else self.rng.sample(pool, k)
+    
+    def _crop_image(self, img: Image.Image, bboxes: List[Tuple[int, int, int, int]]) -> Image.Image:
+        if not bboxes or self.crop_mode == "none":
+            return img
+        if self.crop_mode == "bbox1":
+            x, y, w, h = bboxes[0]
+            return img.crop((x, y, x + w, y + h))
+        if self.crop_mode == "union":
+            x1 = min(b[0] for b in bboxes)
+            y1 = min(b[1] for b in bboxes)
+            x2 = max(b[0] + b[2] for b in bboxes)
+            y2 = max(b[1] + b[3] for b in bboxes)
+            return img.crop((x1, y1, x2, y2))   
+        return img
