@@ -133,7 +133,7 @@ def run_main(cfg: DictConfig):
         elif method == 'PIBISA_ENC':
             sal,_ = compute_saliency(x=x, x_target=model.get_image_features(x), model=model, n_masks=20, beta=beta, return_negative=False)
         elif method == 'M2IB':
-            sal = generate_plot(x_pil,target_caption,nib)
+            sal = generate_plot(x_pil,target_caption,m2ib)
         elif method == 'NIB':
             sal = generate_plot(x_pil,target_caption,nib)
             
