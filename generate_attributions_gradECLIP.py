@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     # Command Line Interface
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--dataset", type=str, default="MSCocoDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
+    argparser.add_argument("--dataset", type=str, default="Flickr8kDataset", choices=["Flickr8kDataset", "GoogleAIConceptualCations", "MSCXRDataset", "MSCocoDataset"])
     argparser.add_argument("--method", type=str, default="cibisa", choices=["chefer", "gradcam", "saliencymap", "fast_ig", "mfaba", "rise", "m2ib", "nib", "cibisa", "cibisa_enc"])
     argparser.add_argument("--beta", type=float, default=2)
     argparser.add_argument("--learn", type=bool, default=False)
@@ -106,9 +106,11 @@ if __name__ == "__main__":
     loss_fn = torch.nn.CosineSimilarity(eps=1e-6)
 
     # Get model, processor, and tokenizer
-    model, processor = clip.load("ViT-B/32", device=device)
+    model, _ = clip.load("ViT-B/32", device=device)
     model.get_image_features = model.encode_image
     model.get_text_features = model.encode_text
+    
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
 
     # Get evaluation method
     method = SALIENCY_METHODS[args.method]    
@@ -182,7 +184,8 @@ if __name__ == "__main__":
                 # print(len(captions), np.shape(captions))
                 for idx, cp in enumerate(captions):
                     # print(np.shape(cp))
-                    tids = [torch.tensor([clip.tokenize(c)]).to(device) for c in cp]
+                    # tids = [torch.tensor([clip.tokenize(c)]).to(device) for c in cp]
+                    tids = [clip.tokenize(c).to(device) for c in cp]
                     # print(tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
                     # print(tf[0].shape, tf[1].shape)
@@ -204,19 +207,26 @@ if __name__ == "__main__":
                 captions = new_caption
 
         # TODO: Review some of these dimensions
-        tid = [torch.tensor([clip.tokenize(cp)]).to(device) for cp in captions]
-        tf = [model.get_text_features(t) for t in tid]
+        tid = [clip.tokenize(cp).to(device) for cp in captions]
+        tf = [clipmodel.encode_text(t) for t in tid]
         tf = torch.cat(tf, dim=0)
         image_processed = image_processed.to(device)
-        im_f = model.get_image_features(image_processed).detach().cpu()
+        im_f = clipmodel.encode_image(image_processed).detach().cpu()
         
         outputs, last_feat, vs, qs, ks, attns, atten_outs, map_size = clip_encode_dense(image_processed, n=1)
-        tf = F.Normalize(tf, dim=-1)
-        im_f = F.Normalize(im_f, dim=-1)
-        cosine = (im_f @ tf.T)[0]
+        img_embedding = F.normalize(outputs[:,0], dim=-1)
+        tf = F.normalize(tf, dim=-1)
+        
+        cosine = (img_embedding @ tf.T)[0]
         
         v_saliency = grad_eclip(cosine, qs, ks, vs, atten_outs, map_size)
-        v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
+        v_saliency -= v_saliency.min()
+        v_saliency /= v_saliency.max()
+        
+        h, w = image_processed.shape[-2:]
+        resize = T.Resize((w,h))
+        v_saliency = resize(v_saliency.unsqueeze(0))
+        v_saliency = v_saliency.detach().cpu().numpy()
         t_saliency = 0
         
         # image_fnames.append(image_fname)
