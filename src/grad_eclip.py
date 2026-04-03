@@ -111,10 +111,15 @@ def grad_eclip(c, qs, ks, vs, attn_outputs, map_size):
             attn_output,
             retain_graph=True)[0]
 
+        grad = attn_output
         grad_cls = grad[:1,0,:]
         v_patch = v[1:,0,:]
         cosine_qk = sim_qk(q, k).reshape(-1)
-        tmp_maps.append((grad_cls * v_patch * cosine_qk[:,None]).sum(-1)) 
+        tmp_maps.append((grad_cls * v_patch * cosine_qk[:,None]).sum(-1))                     
+        
+        # del attn_output.grad, c.grad
+        
+        # torch.cuda.empty_cache()
 
     emap = F.relu_(torch.stack(tmp_maps, dim=0)).sum(0)
     return emap.reshape(*map_size)
