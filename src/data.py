@@ -360,13 +360,8 @@ class InstreDataset(Dataset):
         if self.transform:
             img = self.transform(img)
 
-<<<<<<< HEAD
         ridx = self.sample_same_subset(anchor_idx=idx, k=self.k)
         
-=======
-        ridx = self.sample_same_subset(anchor_idx=idx, k=5)
-
->>>>>>> 26c7ac0a51ab1c54cb522cdb8260e7a5ae83529e
         for i in ridx:
             sr = self.samples[i]
             rimg = Image.open(sr.image_path).convert("RGB")

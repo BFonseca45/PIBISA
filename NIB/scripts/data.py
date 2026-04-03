@@ -25,7 +25,7 @@ class Flickr8kDataset(Dataset):
     """
 
 
-    def __init__(self, root='/home/bfcoelho/Downloads/flickr8k', image_preprocessor=None, transform=None) -> None:
+    def __init__(self, root='/home/up202204320/datasets/flickr8k', image_preprocessor=None, transform=None) -> None:
 
         assert image_preprocessor is not None, 'Please provide an image_preprocessor function'
 
@@ -281,7 +281,7 @@ class MSCocoDataset(Dataset):
 
     # Method: __init__
     def __init__(self, 
-                 root='/home/bfcoelho/Downloads/coco',
+                 root='/data/toys/coco',
                  year=2017, 
                  split='train',
                  image_preprocessor=None, 
@@ -292,11 +292,13 @@ class MSCocoDataset(Dataset):
         assert split in ('train', 'val', 'test'), 'Please provide a valid split (train, val, test)'
         
         # Get images path
-        image_folder = os.path.join(root, str(year), f"{split}{str(year)}")
+        # image_folder = os.path.join(root, str(year), f"{split}{str(year)}")
+        image_folder = os.path.join(root, f"{split}{str(year)}")
 
         # Open CSV with MS-Coco annotations
         coco_ = COCO(
-            annotation_file=os.path.join(root, str(year), "annotations", f"captions_{split}{year}.json")
+            # annotation_file=os.path.join(root, str(year), "annotations", f"captions_{split}{year}.json")
+            annotation_file=os.path.join(root, "annotations", f"captions_{split}{year}.json")
         )
         
 

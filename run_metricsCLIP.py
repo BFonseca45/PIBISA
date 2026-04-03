@@ -12,6 +12,7 @@ warnings.filterwarnings('ignore')
 from PIL import Image
 from src.CIBISA_utils import *
 from src.metrics import *
+from src.grad_eclip import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 from omegaconf import DictConfig, OmegaConf
@@ -27,9 +28,6 @@ else:
 blip_processor = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
 blip = AutoModelForVision2Seq.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
 
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
 
 def generate_plot(image,text,method):    
     image_feat = processor(images=image, return_tensors="pt")['pixel_values'].to(device)
@@ -55,8 +53,10 @@ def generate_plot(image,text,method):
 
 @hydra.main(version_base=None, config_path='./configs/', config_name='config_CLIP.yaml')
 def run_main(cfg: DictConfig):
+    warnings.filterwarnings('ignore')
     # Passing config to variables    
     beta = cfg.param.beta
+    learnable = cfg.param.learnable
     server = cfg.run.server
     method = cfg.run.method
     
@@ -65,7 +65,8 @@ def run_main(cfg: DictConfig):
         config={
             "beta": beta, 
             "server": server,
-            "method": method
+            "method": method,
+            "learnable": learnable
         },
     )
         
@@ -99,14 +100,23 @@ def run_main(cfg: DictConfig):
     MoRF = []
     LeRF = []
     captions = []
-    if method == 'Random':
-        savefile = './out/metrics/CLIP_metrics_random.pkl'
-    elif method == 'PIBISA':
-        savefile = './out/metrics/CLIP_metrics_PIBISA.pkl'
-    elif method == 'M2IB':
-        savefile = './out/metrics/CLIP_metrics_M2IB.pkl'
-    elif method == 'NIB':
-        savefile = './out/metrics/CLIP_metrics_NIB.pkl'
+
+    savefile = './out/metrics/CLIP_metrics_' + method + '.pkl'
+    
+    if method == 'gradeclip':
+        # Get model, processor, and tokenizer
+        model, _ = clip.load("ViT-B/32", device=device)
+        model.get_image_features = model.encode_image
+        model.get_text_features = model.encode_text
+        
+        clipmodel, preprocess = clip.load("ViT-B/32", device=device)    
+        
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
+    else:
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
+        
         
     for x, _ in tqdm(dloader):
         # Generating the caption for a given image
@@ -119,7 +129,7 @@ def run_main(cfg: DictConfig):
         target_caption = blip_processor.decode(blip_out[0], skip_special_tokens=True)
 
         # Generating the CLIP text embedding
-        text = torch.tensor([tokenizer.encode(target_caption, add_special_tokens=True)]).to(device)
+        text = clip.tokenize(target_caption).to(device)
         y_target = model.get_text_features(text).to(device)
 
         # Computing the saliency map to explain the caption
@@ -129,42 +139,72 @@ def run_main(cfg: DictConfig):
             sal = torch.sigmoid(sal)
             sal = sal.detach().cpu().numpy()
         elif method == 'PIBISA':
-            sal,_ = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, beta=beta, return_negative=False)
+            sal,_ = compute_saliency(x=x, x_target=y_target, model=model, n_masks=20, beta=beta, return_negative=False, learnable_param=learnable)
         elif method == 'PIBISA_ENC':
-            sal,_ = compute_saliency(x=x, x_target=model.get_image_features(x), model=model, n_masks=20, beta=beta, return_negative=False)
+            sal,_ = compute_saliency(x=x, x_target=model.get_image_features(x), model=model, n_masks=20, beta=beta, return_negative=False, learnable_param=learnable)
         elif method == 'M2IB':
-            sal = generate_plot(x_pil,target_caption,nib)
+            sal = generate_plot(x_pil,target_caption,m2ib)
         elif method == 'NIB':
             sal = generate_plot(x_pil,target_caption,nib)
+        elif method == 'gradeclip':
+            tf = clipmodel.encode_text(text)
+            outputs, last_feat, vs, qs, ks, attns, atten_outs, map_size = clip_encode_dense(x, n=1, clipmodel=clipmodel)                    
+            img_embedding = F.normalize(outputs[:,0], dim=-1)
+            tf = F.normalize(tf, dim=-1)
             
-        _,morf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='MoRF')
-        _,lerf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='LeRF')
+            cosine = (img_embedding @ tf.T)[0]
+            sal = grad_eclip(cosine, qs, ks, vs, atten_outs, map_size)
+            # clean up everything
+            del outputs, last_feat, vs, qs, ks, attns, atten_outs, map_size
+            torch.cuda.empty_cache()
+            sal -= sal.min()
+            sal /= sal.max()
+            
+            h, w = x.shape[-2:]
+            resize = T.Resize((w,h))
+            sal = resize(sal.unsqueeze(0))
+            sal = sal.detach().cpu().numpy()
+            
+        # _,morf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='MoRF')
+        # _,lerf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='LeRF')
 
-        MoRF.append(morf)
-        LeRF.append(lerf)
+        # MoRF.append(morf)
+        # LeRF.append(lerf)
         
-        if not (i % 5):
-            captions.append(target_caption)
+        fig_savefile = './out/clip_images/saliency' + str(i) + method + '.png'
+        plt.imshow(x_pil)
+        plt.imshow(np.squeeze(sal), cmap='turbo', alpha=0.5)
+        plt.title('Image n ' + str(i))
+        plt.axis('off')
 
-            tosave = {'MoRF':MoRF, 'LeRF':LeRF, "Captions":captions}
-            open_file = open(savefile, 'wb')
-            pickle.dump(tosave, open_file)
-            open_file.close()
+        plt.savefig(fig_savefile)
+        plt.close()
+        
+        if i > 20:
+            break
+        
+        # if not (i % 5):
+        #     captions.append(target_caption)
 
-            MoRF_mean = np.nanmean(MoRF, axis=0)
-            LeRF_mean = np.nanmean(LeRF, axis=0)
+        #     tosave = {'MoRF':MoRF, 'LeRF':LeRF, "Captions":captions}
+        #     open_file = open(savefile, 'wb')
+        #     pickle.dump(tosave, open_file)
+        #     open_file.close()
+
+        #     MoRF_mean = np.nanmean(MoRF, axis=0)
+        #     LeRF_mean = np.nanmean(LeRF, axis=0)
             
-            wandb_run.log({"Meteor_MoRF": MoRF_mean[0],"Bleu_MoRF": MoRF_mean[1], "Rouge1_MoRF": MoRF_mean[2], "Rouge2_MoRF": MoRF_mean[3], "RougeL_MoRF": MoRF_mean[4]})
-            wandb_run.log({"Meteor_LeRF": LeRF_mean[0],"Bleu_LeRF": LeRF_mean[1], "Rouge1_LeRF": LeRF_mean[2], "Rouge2_LeRF": LeRF_mean[3], "RougeL_LeRF": LeRF_mean[4]})
+        #     wandb_run.log({"Meteor_MoRF": MoRF_mean[0],"Bleu_MoRF": MoRF_mean[1], "Rouge1_MoRF": MoRF_mean[2], "Rouge2_MoRF": MoRF_mean[3], "RougeL_MoRF": MoRF_mean[4]})
+        #     wandb_run.log({"Meteor_LeRF": LeRF_mean[0],"Bleu_LeRF": LeRF_mean[1], "Rouge1_LeRF": LeRF_mean[2], "Rouge2_LeRF": LeRF_mean[3], "RougeL_LeRF": LeRF_mean[4]})
                 
-            fig_savefile = './out/clip_images/saliency' + str(i) + method + '.png'
-            plt.imshow(x_pil)
-            plt.imshow(sal, cmap='turbo', alpha=0.5)
-            plt.title('Image n ' + str(i))
-            plt.axis('off')
+            # fig_savefile = './out/clip_images/saliency' + str(i) + method + '.png'
+            # plt.imshow(x_pil)
+            # plt.imshow(sal, cmap='turbo', alpha=0.5)
+            # plt.title('Image n ' + str(i))
+            # plt.axis('off')
 
-            plt.savefig(fig_savefile)
-            plt.close()
+            # plt.savefig(fig_savefile)
+            # plt.close()
 
         i += 1
 

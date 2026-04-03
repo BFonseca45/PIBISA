@@ -221,7 +221,7 @@ if __name__ == "__main__":
             v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
             t_saliency = 0
         elif args.method in ['cibisa_enc']:
-            v_saliency, _ = compute_saliency(x=image_processed, x_target=model.get_image_features(image_processed), model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=False)
+            v_saliency, _ = compute_saliency(x=image_processed, x_target=model.get_image_features(image_processed), model=model, n_masks=20, epochs=15, beta=args.beta, return_negative=False, learnable_param=args.learn)
             v_saliency = np.expand_dims(v_saliency, axis=0)                                                    
             t_saliency = 0
         else:

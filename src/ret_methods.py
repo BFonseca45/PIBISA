@@ -11,7 +11,7 @@ def compute_sbsm(query_tensor, neighbor_tensor, model, block_size=24, stride=12)
     SBSM (Similarity-Based Saliency Map) for any CNN that outputs flat feature vectors.
     Includes debug logging. Works for VGG, DenseNet, etc.
     """
-    device = next(model.parameters()).device
+    # device = next(model.parameters()).device
     query_tensor = query_tensor.to(device)
     neighbor_tensor = neighbor_tensor.to(device)
 

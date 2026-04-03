@@ -2,8 +2,9 @@ import torch
 import torchvision
 import hydra
 import pickle
+import clip
 
-from src.data import * 
+from src.data import *
 from src.CIBISA_utils import *
 from src.CIBISA import *
 from src.models import *
@@ -18,7 +19,7 @@ def run_main(cfg: DictConfig):
     print(cfg)
     savefile = cfg.param.method + '_' + cfg.db.model + '_' + cfg.db.dataset_name + '.pkl'
     print(savefile)
-    
+
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -38,6 +39,12 @@ def run_main(cfg: DictConfig):
         model = ViT16_emb()
         model = model.to(device)
         model.eval()
+    elif cfg.db.model == 'CLIP':
+        model, preprocess = clip.load("ViT-B/32", device=device)
+        model = model.to(device)
+        model.eval()
+        # model = clipmodel.encode_image
+        # model = model.to(device)
 
     transform = torchvision.transforms.Compose([torchvision.transforms.Resize((224,224)),
                                     torchvision.transforms.ToTensor(),
@@ -54,24 +61,32 @@ def run_main(cfg: DictConfig):
         subset_name = "INSTRE-S1"
         csv_path = f"/home/up202204320/datasets/INSTRE/csv/{subset_name}.csv"
         dataset = InstreDataset(csv_path, base_dir, crop_mode=crop_mode, max_boxes=max_boxes, seed=seed, transform=transform)
-        
+
     dloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False)
 
     ci_list = []
     cd_list = []
     idx = 0
-    for q, gt in tqdm(dloader):    
+    for q, gt in tqdm(dloader):
         sal_list = []
-        for j in range(len(gt)): 
+        for j in range(len(gt)):
             if cfg.param.method == 'PIBISA':
-                s,_ = compute_saliency(x=gt[j].to(device), x_target=q.to(device), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
+                if cfg.db.model == 'CLIP':
+                    s,_ = compute_saliency(x=gt[j].to(device), x_target=model.encode_image(q.to(device)), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
+                else:
+                    s,_ = compute_saliency(x=gt[j].to(device), x_target=q.to(device), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
+                
             elif cfg.param.method == 'SBSM':
-                s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=model)
+                if cfg.db.model == 'CLIP':
+                    modelv = model.encode_image
+                    s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=modelv)
+                else:
+                    s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=model)
             sal_list.append(s)
-        
+
         if len(gt) > 5:
             N_SAL = 5
-            
+
             fig, ax = plt.subplots(nrows=1, ncols=N_SAL+1, figsize=(15,15))
             ax[0].imshow(unnormalize(q))
             ax[0].axis('off')
@@ -82,15 +97,15 @@ def run_main(cfg: DictConfig):
             filename = './out/' + cfg.param.method + '/' + cfg.db.dataset_name + '/sal' + str(idx) + cfg.db.model + '.png'
             plt.savefig(filename, bbox_inches='tight')
             plt.close()
-            
+
         ci, cd = confidence_increase_drop(model=model, query=q, gts=gt, saliency=sal_list)
-        
+
         ci_list.extend(ci.detach().cpu().numpy())
         cd_list.extend(cd.detach().cpu().numpy())
-        
+
         idx = idx+1
-        
-        if not(idx%100):            
+
+        if not(idx%100):
             tosave = {'CI':np.mean(ci_list)*100, 'CD':np.mean(cd_list)}
             open_file = open(savefile, 'wb')
             pickle.dump(tosave, open_file)
@@ -98,6 +113,6 @@ def run_main(cfg: DictConfig):
 
     print("Confidence Increase: ", np.mean(ci_list)*100)
     print("Confidence Drop: ", np.mean(cd_list))
-    
+
 if __name__ == '__main__':
     run_main()

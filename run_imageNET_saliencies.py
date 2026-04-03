@@ -55,7 +55,7 @@ def run_main(cfg: DictConfig):
                             torchvision.transforms.ToTensor(), 
                             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
-    path = "/home/bfcoelho/Documents/Datasets/ImageNetS300"
+    path = "/home/up202204320/datasets/ImageNetS300"
     split = "validation"
 
     dset = ImageNETs(path = path, split = split, transform = transform)
@@ -141,7 +141,7 @@ def run_main(cfg: DictConfig):
             plt.title(architecture)
             plt.axis('off')
 
-            fig_savefile = './out/images_ResNET/saliency' + architecture + str(j) + '.png'
+            fig_savefile = './out/images_' + cfg.db.model + '/saliency' + architecture + str(j) + '.png'
             plt.show()
             plt.savefig(fig_savefile)
             plt.close()

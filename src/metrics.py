@@ -168,6 +168,8 @@ def confidence_increase_drop(model, query, gts, saliency):
     gts = torch.squeeze(torch.stack(gts)).to(device)
     sl_mask = create_sal_masks(saliency_list=saliency).to(device)    
     
+    if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel' or model._get_name() == 'CoCa':
+        model = model.encode_image    
     query_emb = model(query.to(device))
     gts_emb = model(gts)
     maks_emb = model(gts * sl_mask)
