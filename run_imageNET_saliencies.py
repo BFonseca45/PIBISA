@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -38,10 +41,7 @@ def run_main(cfg: DictConfig):
             "PointingGame",
             "AttributionLocalisation",
             "TopKIntersection",
-            "RelevanceRankAccuracy",
-            "RelevanceMassAccuracy",
-            "Focus",
-            "AUC"
+            "RelevanceRankAccuracy"
         )
     
     if cfg.db.model == 'ResNET':
@@ -60,7 +60,7 @@ def run_main(cfg: DictConfig):
 
     dset = ImageNETs(path = path, split = split, transform = transform)
     sub_set = Subset(dataset=dset, indices=range(0,100))
-    dataloader = DataLoader(dataset=sub_set, batch_size=1, shuffle=True, num_workers=1, generator=gen_cpu)
+    dataloader = DataLoader(dataset=dset, batch_size=1, shuffle=True, num_workers=1, generator=gen_cpu)
 
     j = 0
     cm = 'turbo'
@@ -136,20 +136,17 @@ def run_main(cfg: DictConfig):
                                                                a_batch=s[None,...], s_batch=m.unsqueeze(0).numpy(), device=device))
             total_metric.append(current_metric)
                                 
-            plt.imshow(x_pil.resize((224,224)))
-            plt.imshow(s, cmap=cm, alpha=alph)
-            plt.title(architecture)
-            plt.axis('off')
+            # plt.imshow(x_pil.resize((224,224)))
+            # plt.imshow(s, cmap=cm, alpha=alph)
+            # plt.title(architecture)
+            # plt.axis('off')
 
-            fig_savefile = './out/images_' + cfg.db.model + '/saliency' + architecture + str(j) + '.png'
-            plt.show()
-            plt.savefig(fig_savefile)
-            plt.close()
+            # fig_savefile = './out/images_ViT/saliency' + architecture + str(j) + '.png'
+            # plt.show()
+            # plt.savefig(fig_savefile)
+            # plt.close()
             
-            j=j+1
-            
-            if j > 100:
-                break
+            # j=j+1            
         
         total_metric_np = np.array(total_metric)
         print("Architecture: ", architecture)

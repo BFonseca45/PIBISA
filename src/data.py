@@ -436,7 +436,7 @@ class ImageNETs(Dataset):
         return len(self.files)
 
     def __getitem__(self, key):
-        img = Image.open(self.files[key])
+        img = Image.open(self.files[key]).convert("RGB") 
         msk_path = self.files[key].replace(self.split, self.split + "-segmentation").replace("JPEG", "png")
         msk = Image.open(msk_path)
 

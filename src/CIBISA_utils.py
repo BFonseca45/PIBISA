@@ -17,7 +17,7 @@ def compute_saliency(x:torch.Tensor, x_target:torch.Tensor, model, loss_mode='co
     k = 3*224*224
     with torch.enable_grad():
         if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel' or model._get_name() == 'CoCa':
-            assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
+            # assert x_target.shape == (1,512), "When using the CLIP model, you should pass the text/image embedding of shape (1,512) as target"
             y_target = x_target
         else:
             y_target = model(x_target)
