@@ -14,7 +14,7 @@ from torchvision.datasets.imagenet import ImageNet
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 
-from src.CIBISA import *
+from pibisa import *
 from src.utils import *
 from src.metrics import *
 from src.models import *
@@ -88,7 +88,7 @@ def run_main(cfg: DictConfig):
     morf = []
     times = []
 
-    eval_tool = EvalMetric(model = metric_model)
+    eval_tool = DeletionMetrics(modelForward = metric_model)
 
     i = 0
     for x,y1 in tqdm(dataloader):
@@ -105,9 +105,9 @@ def run_main(cfg: DictConfig):
         y_target = metric_model(x)
         y_target = torch.argmax(y_target, dim=1)
 
-        score_l, area = eval_tool.compute_score(img=x, y_target=y_target, saliency=saliency_flat, metric='LeRF')
+        score_l, area = eval_tool.compute_score(inputImage=x, yTarget=y_target, saliency=saliency_flat, metric='LeRF')
         lerf.append(area)
-        score_m, area = eval_tool.compute_score(img=x, y_target=y_target, saliency=saliency_flat, metric='MoRF')
+        score_m, area = eval_tool.compute_score(inputImage=x, yTarget=y_target, saliency=saliency_flat, metric='MoRF')
         morf.append(area)
 
         i = i+1

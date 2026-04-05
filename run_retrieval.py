@@ -5,11 +5,11 @@ import pickle
 import clip
 
 from src.data import *
-from src.CIBISA_utils import *
-from src.CIBISA import *
+from utils import *
+from pibisa import *
 from src.models import *
 from src.metrics import create_sal_masks, confidence_increase_drop
-from src.ret_methods import compute_sbsm
+from sbsm import compute_sbsm
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 
@@ -98,7 +98,7 @@ def run_main(cfg: DictConfig):
             plt.savefig(filename, bbox_inches='tight')
             plt.close()
 
-        ci, cd = confidence_increase_drop(model=model, query=q, gts=gt, saliency=sal_list)
+        ci, cd = confidence_increase_drop(encoderForward=model, inputQuery=q, inputTargets=gt, saliency=sal_list)
 
         ci_list.extend(ci.detach().cpu().numpy())
         cd_list.extend(cd.detach().cpu().numpy())

@@ -1,25 +1,22 @@
 # Imports
-import os
 import csv
+import glob
+import os
 import random
+import urllib.request
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Tuple
+
 import numpy as np
 import pandas as pd
-import urllib.request
-import glob
 import torch
 import torchvision
-
-from pathlib import Path
-from dataclasses import dataclass
-from typing import List, Tuple
-from collections import defaultdict
-
 from PIL import Image
-from tqdm import tqdm
-
 # PyTorch Imports
 from torch.utils.data import Dataset
-
+from tqdm import tqdm
 
 
 # Function: Build Flickr8k Dataset using Torchvision
@@ -427,7 +424,7 @@ class InstreDataset(Dataset):
         return img
 
 class ImageNETs(Dataset):
-    def __init__(self, path, split, transform):
+    def __init__(self, path: str, split: str, transform):
         self.files = glob.glob(os.path.join(path, split, "**", "*.JPEG"))
         self.transform = transform
         self.split = split

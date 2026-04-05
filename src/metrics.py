@@ -4,181 +4,170 @@ import evaluate
 
 from transformers import AutoProcessor
 from tqdm import tqdm
-from src.CIBISA_utils import unnormalize
+from utils import unnormalize
+from typing import Literal
 
-if torch.cuda.is_available():
-    dev = "cuda:0"
-else:
-    dev = "cpu"
-
-device = torch.device(dev)
-np.random.seed(10)
-
-class EvalMetric():
-    def __init__(self, model, mode='logit') -> None:
-        assert mode in ['logit', 'cosine','nle'], "Please, enter a valid mode, options ['logit', 'cosine']"
-
-        self.model = model
-        self.mode = mode
-        if self.mode == 'nle':
-            print("Using BLIP preprocessor")
+class DeletionMetrics:
+    ''' Computes the MoRF and LeRF metrics. It can observe either the logits in the case of 
+    classification; the cosine similarity in case of retrieval; or how the output of BLIP changes
+    as we delete information for the input (nle mode).
+    @encoderForward: the method used to compute the forward pass of the backbone. For CLIP it is
+    model.encode_image or model.get_image_features. For BLIP, when evaluating NLEs, it is model.generate
+    ''' 
+    def __init__(self,
+                encoder_forward,
+                observed_out: Literal['logit', 'similarity', 'nle'] = 'logit',
+                number_steps: int = 784,
+                input_shape: tuple = (224,224)):
+        
+        self.encoder_forward = encoder_forward
+        self.task = observed_out
+        self.h, self.w = input_shape
+        self.block_size = int(np.sqrt(self.h*self.w/number_steps))
+        
+        if observed_out == 'nle':
             self.processor = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
             self.nlp_metrics = evaluate.combine(["bleu", "meteor", "rouge"])
+        
+        # Bind the right similarity function once
+        self._compute_sim = {'logit': self._logit_sim,
+                            'similarity': self._cosine_sim,
+                            'nle': self._nle_sim,
+                            }[observed_out]
 
-    def get_tiles(self, saliency, STEP=8):
-        self.STEP = STEP
-        importance = []
+    def _logit_sim(self,
+                   input_image: torch.Tensor,
+                   target: torch.Tensor):
+        ''' @target is the index that represents the original predicted class 
+        '''        
+        preds = self.encoder_forward(input_image)
+        preds = torch.nn.functional.softmax(preds, dim=1)
+        return preds[0, target].detach().cpu().numpy()
+
+    def _cosine_sim(self,
+                    input_image: torch.Tensor,
+                    target: torch.Tensor):
+        ''' @target is the embedding obtained by passing the target input through
+        its backbone. The embedding can be obtained either from text, or from another
+        image. 
+        '''
+        preds = self.encoder_forward(input_image)
+        return torch.nn.functional.cosine_similarity(target, preds).detach().cpu().numpy()
+
+    def _nle_sim(self,
+                 input_image: torch.Tensor,
+                 target: str):
+        ''' @target is the original text predicted by BLIP
+        '''        
+        input_image = unnormalize(input_image)
+        inputs = self.processor(input_image, return_tensors="pt").to("cuda")
+        pred_text = self.encoder_forward(**inputs)
+        pred_text = self.processor.decode(pred_text[0], skip_special_tokens=True)
+        m = self.nlp_metrics.compute(predictions=[pred_text], references=[target])
+        return np.array([m['meteor'], m['bleu'], m['rouge1'], m['rouge2'], m['rougeL']])
+
+    def sort_coordinates(self, 
+                         saliency_map: np.ndarray, 
+                         reverse: bool = True) -> list:
+        
+        ''' Takes a saliency map and return its sorted coordenates based on the most/least 
+        important pixels. When @reverse = True, sort by the most relevant first.
+        '''        
+        saliency_map = np.squeeze(saliency_map) 
+        assert (self.h, self.w) == saliency_map.shape, "Saliency shape must match @inputShape"
+        
         coords = []
+        importance = []        
+        for i in range(0, self.h, self.block_size):
+            for j in range(0, self.w, self.block_size):
+                importance.append(saliency_map[i:i+self.block_size, j:j+self.block_size].sum())
+                coords.append((i, j))
+                
+        indices = np.argsort(np.array(importance))
+        if reverse:
+            indices = indices[::-1]
+        return [coords[i] for i in indices]
 
-        for i in range(0, len(saliency[0,:]), self.STEP):
-            for n in range(0, len(saliency[:,0]), self.STEP):
-                aux = np.sum(saliency[i:i+self.STEP, n:n+self.STEP])
-                importance.append(aux)
-                coords.append([i, n])
+    def compute_score(self, 
+                      image_input: torch.Tensor, 
+                      target: torch.Tensor | str, 
+                      saliency_map: np.typing.NDArray, 
+                      metric: Literal['MoRF', 'LeRF'] = 'MoRF'):
+        
+        coords_sorted = self.sort_coordinates(saliency_map, reverse=(metric == 'MoRF'))
+        scores = [self._compute_sim(image_input, target)]
+        
+        mask = torch.ones_like(image_input, dtype=torch.float32)        
+        for idx, idy in coords_sorted[:-1]:
+            mask[:, :, idx:idx+self.block_size, idy:idy+self.block_size] = 0
+            masked = (image_input * mask).to(image_input.device)
+            scores.append(self._compute_sim(masked, target))
 
-        return coords, importance
-
-    def sort_coordenates(self, importance, coords, reverse = True):
-        importance_sorted = np.unique(importance)
-        importance_sorted = sorted(importance_sorted, reverse=reverse) # Change this line to remove the least important pixels first
-
-        coords_sorted = []
-        for t in range(len(importance_sorted)):
-            ind = np.where(importance == importance_sorted[t])
-            for p in range(len(ind[0])):
-                coords_sorted.append(coords[ind[0][p]])
-
-        return coords_sorted
-
-    def compute_sim(self, image, y):
-        if self.mode == 'logit':
-            preds = self.model(image)
-            preds = torch.nn.functional.softmax(preds, dim=1)
-            return preds[0,y].detach().cpu().numpy()
-
-        elif self.mode == 'cosine':
-            preds = self.model.encode_image(image)
-            return torch.nn.functional.cosine_similarity(y, preds).detach().cpu().numpy()
-
-        elif self.mode == 'nle':
-            image = unnormalize(image)
-            inputs = self.processor(image, return_tensors="pt").to("cuda")
-            preds = self.model.generate(**inputs)
-            preds = self.processor.decode(preds[0], skip_special_tokens=True)
-
-            m = self.nlp_metrics.compute(predictions=[preds], references=[y])
-
-            return [m['meteor'], m['bleu'], m['rouge1'], m['rouge2'], m['rougeL']]
-
-        else:
-            raise NameError("Insert a valid mode, options ['logit', 'cosine', 'nle]")
-
-    def compute_score(self, img, y_target, saliency, metric):
-        coords, importance = self.get_tiles(saliency=saliency)
-        score = []
-
-        similarity = self.compute_sim(image=img, y=y_target)
-        score.append(similarity)
-
-        if metric == 'MoRF':
-            mask = torch.ones_like(img, dtype=torch.float32)
-            ocl = 0
-            coords_sorted = self.sort_coordenates(coords=coords, importance=importance, reverse=True)
-
-        elif metric == 'LeRF':
-            mask = torch.ones_like(img, dtype=torch.float32)
-            ocl = 0
-            coords_sorted = self.sort_coordenates(coords=coords, importance=importance, reverse=False)
-
-        for i in range(len(coords_sorted) - 1):
-            idx = coords_sorted[i][0]
-            idy = coords_sorted[i][1]
-            mask[:,:,idx:idx+self.STEP, idy:idy+self.STEP] = ocl
-
-            # masking the input image
-            img_in = img * mask
-            img_in = img_in.to(device)
-
-            similarity = self.compute_sim(image=img_in, y=y_target)
-            score.append(similarity)
-
-        score = np.array(score, dtype=np.float32)
-        score = (score - score.min(axis=0))/(score.max(axis=0) - score.min(axis=0))
-
-        x = np.linspace(start=0, stop=1, num=len(score))
-        area = np.trapz(np.squeeze(score),x, axis=0)
-
-        return score, area
-
-    # def gauss_deg(self, saliency, scale_shape):
-    #     imgg = self.img.detach().cpu().numpy()
-
-    #     similarity0 = self.compute_sim(image=self.img)
-
-    #     noise = np.random.randn(1,3,scale_shape,scale_shape)*np.std(imgg) + np.mean(imgg)
-
-    #     saliency_norm = (saliency - saliency.min()) / (saliency.max() - saliency.min())
-    #     saliency_norm = np.stack((saliency_norm, saliency_norm, saliency_norm))
-    #     saliency_norm = saliency_norm[None,...]
-
-    #     img_in = saliency_norm*imgg + (1 - saliency_norm)*noise
-    #     img_in = torch.Tensor(img_in)
-    #     img_in = img_in.to(device)
-
-    #     similarity = self.compute_sim(image=img_in)
-    #     ratio = (similarity + 1e-6)/(similarity0 + 4e-6)
-
-    #     return img_in, np.clip(ratio, 0, 1)
-
-    def pointing_game(self, box_coord, saliency):
-        ind = np.unravel_index(np.argmax(saliency), saliency.shape)
-        if (ind[1] > box_coord[0] and ind[1] < box_coord[2]) and (ind[0] > box_coord[1] and ind[0] < box_coord[3]):
-            return 1, ind
-        else:
-            return 0, ind
-
-def kl_div_uni(x1, x2):
-    mu_x1 = torch.mean(x1)
-    mu_x2 = torch.mean(x2)
-
-    std_x1 =torch.std(x1)
-    std_x2 = torch.std(x2)
-
-    dkl = torch.log(std_x2/std_x1) + (std_x1**2 + (mu_x1 - mu_x2)**2)/(2*std_x2**2) - 0.5
-
-    return dkl
-
-def create_sal_masks(saliency_list):
-    sl = np.array(saliency_list)
-    sl_mask = sl.copy()
-    threshold = np.percentile(sl.reshape(len(sl),-1),50, axis=-1)
+        scores = np.array(scores, dtype=np.float32)
+        scores = (scores - scores.min(axis=0)) / (scores.max(axis=0) - scores.min(axis=0))
+        
+        x = np.linspace(0, 1, len(scores))
+        area = np.trapezoid(np.squeeze(scores), x, axis=0)
+        
+        return scores, area
     
-    thresh_matrix = np.zeros_like(sl)    
-    for j,th in enumerate(threshold):
-        thresh_matrix[j,:,:] = th
+class RetrievalMetrics:
+    ''' Computes the Confidence Increase and Confidence Drop metrics for the retrieval
+    task. The class is initialized only witht the encoder forward method. The input image,
+    target embedding and saliency map should be passed to the compute_increase_drop method. 
+    '''    
+    def __init__(self, 
+                 encoder_forward, 
+                 percentile: int = 50) -> None:
+        
+       self.encoder_forward = encoder_forward         
+       self.percentile = percentile
     
-    sl_mask[sl < thresh_matrix] = 0
-    sl_mask[sl > thresh_matrix] = 1
-    
-    sl_mask = torch.tensor(sl_mask, device=device)
+    def _create_sal_masks(self,
+                          saliency_list: list) -> torch.Tensor:
+        ''' Given a list of saliencies, returns binarized versions of it corresponding
+        to the 50% of most important pixels
+        '''
 
-    return sl_mask.view((-1,1,224,224))
+        saliency_array = np.array(saliency_list)
+        # Computes the 50% percentile for each of the saliencies
+        threshold = np.percentile(saliency_array.reshape(len(saliency_array),-1),self.percentile, axis=-1)
 
-def confidence_increase_drop(model, query, gts, saliency):
-    gts = torch.squeeze(torch.stack(gts)).to(device)
-    sl_mask = create_sal_masks(saliency_list=saliency).to(device)    
-    
-    if model._get_name() == 'CLIP' or model._get_name() == 'CLIPModel' or model._get_name() == 'CoCa':
-        model = model.encode_image    
-    query_emb = model(query.to(device))
-    gts_emb = model(gts)
-    maks_emb = model(gts * sl_mask)
+        # Defines a mapping matrix, containing the values of the 50% percentile for
+        # each saliency.
+        thresh_matrix = np.zeros_like(saliency_array)
+        for j,th in enumerate(threshold):
+            thresh_matrix[j,:,:] = th
+            
+        # Creates the binary mask using the threshold        
+        binary_mask = (saliency_array > thresh_matrix).astype(np.float32)
+        binary_mask = torch.tensor(binary_mask)
 
-    sim_ori = torch.nn.functional.cosine_similarity(query_emb, gts_emb)
-    sim_sal = torch.nn.functional.cosine_similarity(query_emb, maks_emb)
+        return torch.squeeze(binary_mask, dim=1)
 
-    ci = torch.nn.functional.relu(sim_sal - sim_ori).bool()*1
-    cd = torch.nn.functional.relu(sim_ori - sim_sal)
-    cd = cd[cd.nonzero()]
-    
-    return ci, cd
+    def confidence_increase_drop(self, 
+                                 input_query: torch.Tensor, 
+                                 input_targets, 
+                                 saliency_list: list[np.ndarray]) -> tuple[torch.Tensor, torch.Tensor]:
+        '''For a given query and its target/saliencies pairs. Compute the
+        Confidence Increase and Confidence Drop metrics for all targets.
+        @inputTarget: list containing all target images for a given query
+        @saliencyList: list containing the attributions highlights what elements in each
+        target are similar to the query
+        '''
+        input_targets = torch.squeeze(torch.stack(input_targets), dim=1).to(input_query.device)
+        saliency_mask = self._create_sal_masks(saliency_list).to(input_query.device)
+
+        query_emb = self.encoder_forward(input_query)
+        target_embds = self.encoder_forward(input_targets)
+        mask_embds = self.encoder_forward(input_targets * saliency_mask)
+
+        similarity_original = torch.nn.functional.cosine_similarity(query_emb, target_embds)
+        similarity_masked = torch.nn.functional.cosine_similarity(query_emb, mask_embds)
+
+        diff = similarity_masked - similarity_original
+        confidence_increase = (diff > 0).float()
+        confidence_drop = torch.nn.functional.relu(-diff)
+        confidence_drop = confidence_drop[confidence_drop > 0]
+
+        return confidence_increase, confidence_drop

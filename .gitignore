@@ -188,4 +188,5 @@ src/utils/Tutorial_ImageNet_Example_All_Metrics.ipynb
 *.pkl
 src/__pycache__
 
-./NIB
+NIB
+visualizations

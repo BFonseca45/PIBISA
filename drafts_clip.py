@@ -7,7 +7,7 @@ import evaluate
 warnings.filterwarnings('ignore')
 
 from PIL import Image
-from src.CIBISA_utils import *
+from utils import *
 from src.metrics import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast

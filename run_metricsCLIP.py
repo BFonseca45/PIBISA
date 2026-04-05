@@ -10,7 +10,7 @@ import wandb
 warnings.filterwarnings('ignore')
 
 from PIL import Image
-from src.CIBISA_utils import *
+from utils import *
 from src.metrics import *
 from src.grad_eclip import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
@@ -78,7 +78,7 @@ def run_main(cfg: DictConfig):
     print("Device in use: ", device)
     torch.manual_seed(0)
 
-    eval_tool = EvalMetric(model=blip, mode='nle')
+    eval_tool = DeletionMetrics(modelForward=blip, mode='nle')
 
     transform = torchvision.transforms.Compose([torchvision.transforms.Resize((224,224)),
                                 torchvision.transforms.ToTensor(),

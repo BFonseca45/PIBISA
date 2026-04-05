@@ -19,8 +19,8 @@ from NIB.scripts.eval import metric_evaluation, metric_evaluation_vision
 from NIB.scripts.methods import vision_heatmap_iba, text_heatmap_iba
 from NIB.saliency import chefer, gradcam, saliencymap, fast_ig, mfaba, rise, m2ib, nib
 
-from src.CIBISA import *
-from src.CIBISA_utils import *
+from pibisa import *
+from utils import *
 
 
 # Setup environment variables
@@ -98,13 +98,13 @@ if __name__ == "__main__":
     setup_seed(seed=args.seed)
 
     # Constants
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = args.batch_size
     num_workers = args.num_workers
     loss_fn = torch.nn.CosineSimilarity(eps=1e-6)
 
     # Get model, processor, and tokenizer
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(config.device)
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
     tokenizer = CLIPTokenizerFast.from_pretrained("openai/clip-vit-base-patch32")
 
@@ -180,7 +180,7 @@ if __name__ == "__main__":
                 # print(len(captions), np.shape(captions))
                 for idx, cp in enumerate(captions):
                     # print(np.shape(cp))
-                    tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(device) for c in cp]
+                    tids = [torch.tensor([tokenizer.encode(c, add_special_tokens=True)]).to(config.device) for c in cp]
                     # print(tids[0].shape, tids[1].shape)
                     tf = [model.get_text_features(t) for t in tids]
                     # print(tf[0].shape, tf[1].shape)
@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
                     # This is the correct way of doing it: for each set of captions there is a specific image with index = idx
                     img_proc = image_processed[idx].unsqueeze(0)
-                    im_features = model.get_image_features(img_proc.to(device))
+                    im_features = model.get_image_features(img_proc.to(config.device))
                     # print(im_features.shape, img_proc.shape, image_processed.shape)
                     prob = torch.nn.functional.softmax(loss_fn(im_features, tf), -1)
                     # print(prob.shape)
@@ -202,10 +202,10 @@ if __name__ == "__main__":
                 captions = new_caption
 
         # TODO: Review some of these dimensions
-        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(device) for cp in captions]
+        tid = [torch.tensor([tokenizer.encode(cp, add_special_tokens=True)]).to(config.device) for cp in captions]
         tf = [model.get_text_features(t) for t in tid]
         tf = torch.cat(tf, dim=0)
-        image_processed = image_processed.to(device)
+        image_processed = image_processed.to(config.device)
         im_f = model.get_image_features(image_processed).detach().cpu()
 
         if args.method in ['chefer', 'gradcam', 'saliencymap', 'fast_ig', 'mfaba']:
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     # Get results
     res = metric_evaluation_vision(
         model=model, 
-        device=device, 
+        device=config.device, 
         images_processed=images_processed, 
         image_features=image_features,
         text_features=text_features, 

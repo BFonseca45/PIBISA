@@ -1,7 +1,7 @@
 import torch
 import torchvision
 
-from src.vision_transformer import VisionTransformer, vit_tiny, vit_small, vit_base, vit_large
+from vision_transformer import vit_base
 
 class VGG_emb(torch.nn.Module):
     def __init__(self, level='full'):

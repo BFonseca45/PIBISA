@@ -17,8 +17,8 @@ from torchvision.datasets.imagenet import ImageNet
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 
-from src.CIBISA import *
-from src.CIBISA_utils import *
+from pibisa import *
+from utils import *
 from src.data import ImageNETs
 # from src.metrics import *
 from src.models import *
