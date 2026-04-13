@@ -92,7 +92,7 @@ class DeletionMetrics:
                       image_input: torch.Tensor, 
                       target: torch.Tensor | str, 
                       saliency_map: np.typing.NDArray, 
-                      metric: Literal['MoRF', 'LeRF'] = 'MoRF'):
+                      metric: Literal['MoRF', 'LeRF'] = 'MoRF') -> tuple[np.ndarray, float]:
         
         coords_sorted = self.sort_coordinates(saliency_map, reverse=(metric == 'MoRF'))
         scores = [self._compute_sim(image_input, target)]

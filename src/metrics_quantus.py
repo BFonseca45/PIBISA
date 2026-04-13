@@ -15,8 +15,6 @@ class QuantusMetrics:
     def compute_metric(self):
         pass
 
-
-
 # Faithfulness: Quantifies to what extent explanations follow the predictive behaviour of the model 
 # (asserting that more important features play a larger role in model outcomes)
 class QuantusFaithfulness(QuantusMetrics):

@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 from PIL import Image
 from src.utils import *
-from src.metrics import *
+from metrics_implemented import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
 from omegaconf import DictConfig, OmegaConf

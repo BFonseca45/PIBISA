@@ -80,15 +80,15 @@ class ViT16_emb(torch.nn.Module):
 
     def forward(self, x):
         if self.weights == 'ImageNET':
-            x = self.backbone._process_input(x)
+            x = self.backbone._process_input(x) # type: ignore
 
             n = x.shape[0]
 
             # Expand the class token to the full batch
-            batch_class_token = self.backbone.class_token.expand(n, -1, -1)
+            batch_class_token = self.backbone.class_token.expand(n, -1, -1) # type: ignore
             x = torch.cat([batch_class_token, x], dim=1)
 
-            x = self.backbone.encoder(x)
+            x = self.backbone.encoder(x) # type: ignore
             x = x[:, 0]
 
             return self.flatten(x)

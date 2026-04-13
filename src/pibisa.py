@@ -1,6 +1,6 @@
 import dataclasses
-from typing import Literal, Any
 import warnings
+from typing import Literal
 
 import numpy as np
 import torch
@@ -145,10 +145,7 @@ class PibisaConfig:
     beta: int | None = None
     phi: int | None = None
     
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
+    device: torch.device = torch.device('cuda')
 
 class PibisaAtt():
     def __init__(self, encoder_forward, config: PibisaConfig) -> None:   
