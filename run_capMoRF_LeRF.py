@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 from PIL import Image
 from utils import *
-from metrics_implemented import *
+from metrics_pibisa import *
 from src.grad_eclip import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
@@ -165,11 +165,11 @@ def run_main(cfg: DictConfig):
             sal = resize(sal.unsqueeze(0))
             sal = sal.detach().cpu().numpy()
             
-        # _,morf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='MoRF')
-        # _,lerf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='LeRF')
+        _,morf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='MoRF')
+        _,lerf = eval_tool.compute_score(img=x, y_target=target_caption, saliency=sal.squeeze(), metric='LeRF')
 
-        # MoRF.append(morf)
-        # LeRF.append(lerf)
+        MoRF.append(morf)
+        LeRF.append(lerf)
         
         fig_savefile = './out/clip_images/saliency' + str(i) + method + '.png'
         plt.imshow(x_pil)

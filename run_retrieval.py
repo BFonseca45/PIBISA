@@ -1,54 +1,41 @@
+import sys
+sys.path.insert(0, "/home/bfcoelho/Documents/Scripts/CIBISA/src/")
+
 import torch
 import torchvision
 import hydra
 import pickle
-import clip
+import csv
 
 from src.data import *
-from utils import *
-from pibisa import *
-from src.models import *
-from metrics_implemented import create_sal_masks, confidence_increase_drop
-from sbsm import compute_sbsm
+from src.utils import select_model_no_head, create_save_folder
+from src.pibisa import PibisaAtt, PibisaConfig
+from metrics_pibisa import RetrievalMetrics
+from src.sbsm import compute_sbsm
 from tqdm import tqdm
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
-@hydra.main(version_base=None, config_path='./configs/', config_name='config.yaml')
+@hydra.main(version_base=None, config_path='./configs/', config_name='config_retrieval.yaml')
 def run_main(cfg: DictConfig):
-    # Passing config to variables
-    print(cfg)
-    savefile = cfg.param.method + '_' + cfg.db.model + '_' + cfg.db.dataset_name + '.pkl'
-    print(savefile)
+    # Passing config to variables    
+    csv_file, json_file = create_save_folder(cfg=cfg, 
+                                             metrics_list=['PIBISA CI', ' PIBISA CD', 'SBSM CI', 'SBSM CD'])
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
 
-    if cfg.db.model == 'VGG':
-        model = VGG_emb()
-        model = model.to(device)
-        model.eval()
-
-    elif cfg.db.model == 'ResNET':
-        model = ResNET_emb()
-        model = model.to(device)
-        model.eval()
-
-    elif cfg.db.model == 'ViT':
-        model = ViT16_emb()
-        model = model.to(device)
-        model.eval()
-    elif cfg.db.model == 'CLIP':
-        model, preprocess = clip.load("ViT-B/32", device=device)
-        model = model.to(device)
-        model.eval()
-        # model = clipmodel.encode_image
-        # model = model.to(device)
+    model = select_model_no_head(model_name=cfg.model)
+    model = model.eval().to(device)    
+    
+    if model._get_name() == 'CLIP':
+        model.forward = model.encode_image # type: ignore
 
     transform = torchvision.transforms.Compose([torchvision.transforms.Resize((224,224)),
                                     torchvision.transforms.ToTensor(),
                                     torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    
     if cfg.db.dataset_name == 'oxford':
         dataset = OxfordBuildings(path='/home/up202204320/datasets/oxford/', transform=transform)
     elif cfg.db.dataset_name == 'paris':
@@ -63,56 +50,43 @@ def run_main(cfg: DictConfig):
         dataset = InstreDataset(csv_path, base_dir, crop_mode=crop_mode, max_boxes=max_boxes, seed=seed, transform=transform)
 
     dloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False)
+    
+    pibisa_cfg = PibisaConfig(beta=cfg.beta, phi=cfg.phi, device=device)
+    pibisa = PibisaAtt(encoder_forward=model.forward, config=pibisa_cfg)
+    
+    ret_metrics = RetrievalMetrics(encoder_forward=model.forward)
+    
+    ci_list_pibisa = []
+    cd_list_pibisa = []
+    ci_list_sbsm = []
+    cd_list_sbsm = []    
 
-    ci_list = []
-    cd_list = []
-    idx = 0
     for q, gt in tqdm(dloader):
-        sal_list = []
-        for j in range(len(gt)):
-            if cfg.param.method == 'PIBISA':
-                if cfg.db.model == 'CLIP':
-                    s,_ = compute_saliency(x=gt[j].to(device), x_target=model.encode_image(q.to(device)), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
-                else:
-                    s,_ = compute_saliency(x=gt[j].to(device), x_target=q.to(device), model=model, n_masks=20, epochs=15, beta=cfg.param.beta, return_negative=False, learnable_param=cfg.param.learnable)
-                
-            elif cfg.param.method == 'SBSM':
-                if cfg.db.model == 'CLIP':
-                    modelv = model.encode_image
-                    s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=modelv)
-                else:
-                    s = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=model)
-            sal_list.append(s)
+        sal_list_sbsm = []
+        sal_list_pibisa = []
+        for j in range(len(gt)):            
+            saliency_pibisa = pibisa.compute_attribution(query_image=q.to(device), target_emb=model.forward(gt[j].to(device)))    
+            sal_list_pibisa.append(saliency_pibisa)
+            
+            saliency_sbsm = compute_sbsm(query_tensor=q.to(device), neighbor_tensor=gt[j].to(device),model=model.forward, device=device)
+            sal_list_sbsm.append(saliency_sbsm)
 
-        if len(gt) > 5:
-            N_SAL = 5
+        ci_pibisa, cd_pibisa = ret_metrics.confidence_increase_drop(input_query=q, input_targets=gt, saliency_list=sal_list_pibisa)
+        ci_sbsm, cd_sbsm = ret_metrics.confidence_increase_drop(input_query=q, input_targets=gt, saliency_list=sal_list_sbsm)
+        
+        with open(csv_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([ci_pibisa, cd_pibisa, ci_sbsm, cd_sbsm])
+        
+        ci_list_pibisa.extend(ci_pibisa.detach().cpu().numpy())
+        cd_list_pibisa.extend(cd_pibisa.detach().cpu().numpy())
 
-            fig, ax = plt.subplots(nrows=1, ncols=N_SAL+1, figsize=(15,15))
-            ax[0].imshow(unnormalize(q))
-            ax[0].axis('off')
-            for i in range(1,len(ax)):
-                ax[i].imshow(unnormalize(gt[i]))
-                ax[i].imshow(sal_list[i-1], cmap='turbo', alpha=0.4)
-                ax[i].axis('off')
-            filename = './out/' + cfg.param.method + '/' + cfg.db.dataset_name + '/sal' + str(idx) + cfg.db.model + '.png'
-            plt.savefig(filename, bbox_inches='tight')
-            plt.close()
-
-        ci, cd = confidence_increase_drop(encoderForward=model, inputQuery=q, inputTargets=gt, saliency=sal_list)
-
-        ci_list.extend(ci.detach().cpu().numpy())
-        cd_list.extend(cd.detach().cpu().numpy())
-
-        idx = idx+1
-
-        if not(idx%100):
-            tosave = {'CI':np.mean(ci_list)*100, 'CD':np.mean(cd_list)}
-            open_file = open(savefile, 'wb')
-            pickle.dump(tosave, open_file)
-            open_file.close()
-
-    print("Confidence Increase: ", np.mean(ci_list)*100)
-    print("Confidence Drop: ", np.mean(cd_list))
+        ci_list_sbsm.extend(ci_sbsm.detach().cpu().numpy())
+        cd_list_sbsm.extend(cd_sbsm.detach().cpu().numpy())
+        
+        
+    print("Confidence Increase: ", np.mean(ci_list_sbsm)*100)
+    print("Confidence Drop: ", np.mean(cd_list_sbsm))
 
 if __name__ == '__main__':
     run_main()

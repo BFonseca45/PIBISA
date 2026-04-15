@@ -198,7 +198,7 @@ def select_model_no_head(model_name: str = 'ResNET') -> torch.nn.Module:
     
 def create_save_folder(cfg: omegaconf.DictConfig, metrics_list: list[str]) -> tuple[str, str]:
     today = datetime.datetime.now().strftime('%Y-%m-%d')
-    save_path = os.path.join(cfg.out_path, "classification", cfg.model, today)
+    save_path = os.path.join(cfg.out_path, cfg.model, today)
     i = 0
     while i < 100:
         save_path = save_path + '_' + str(i)

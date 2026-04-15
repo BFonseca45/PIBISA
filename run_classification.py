@@ -15,7 +15,7 @@ import omegaconf
 
 import src.pibisa
 import src.utils
-import src.metrics_implemented
+import src.metrics_pibisa
 
 @hydra.main(version_base=None, config_path='./configs/', config_name='config_classification.yaml')
 def run_main(cfg: omegaconf.DictConfig):
@@ -46,7 +46,7 @@ def run_main(cfg: omegaconf.DictConfig):
     lerf = []
     morf = []
 
-    del_metrics = src.metrics_implemented.DeletionMetrics(encoder_forward = metric_model.forward)
+    del_metrics = src.metrics_pibisa.DeletionMetrics(encoder_forward = metric_model.forward)
 
     config = src.pibisa.PibisaConfig(beta=cfg.beta, phi=cfg.phi, device=device)
     pibisa = src.pibisa.PibisaAtt(model.forward, config)

@@ -1,4 +1,4 @@
 beta: None
 phi: None
 model: 'ResNET'  
-out_path: 'results/'
+out_path: 'results/classification'

@@ -1,0 +1,5 @@
+beta: None
+phi: None
+model: 'ResNET'  
+dataset: 'oxford'
+out_path: 'results/retrieval'
