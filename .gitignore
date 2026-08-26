@@ -7,3 +7,6 @@ pre_trained_models
 tests
 src/__pycache__
 src/.vscode
+outputs
+multirun
+results

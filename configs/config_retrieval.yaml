@@ -1,5 +1,5 @@
-beta: None
-phi: None
+beta: 1
+phi: 1
 model: 'ResNET'  
 dataset: 'oxford'
 out_path: 'results/retrieval'
