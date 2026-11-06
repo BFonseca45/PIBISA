@@ -8,8 +8,8 @@ import torch
 
 class InfoLayer(torch.nn.Module):
     """This class represents the bottleneck to be trained.
-    @down_rate: The small mask will have dimensions input_shape/down_rate
-    @dist_range: The limits of an Uniform distribution U[-distRange, distRange]
+    down_rate: The small mask will have dimensions input_shape/down_rate
+    dist_range: The limits of an Uniform distribution U[-dist_range, dist_range]
     """
 
     def __init__(
@@ -55,29 +55,17 @@ class MaskLoss(torch.nn.Module):
     """
     Computes the term of the P-IBISA loss function that depends only on the mask.
     When the values of beta and phi are not specified (None), the parameters are
-    learned by default. Specifying only one of the parameters is not expected,
+    set to 1.0 by default. Specifying only one of the parameters is not expected,
     so the class sets a default value for both and flags a warning.
     """
 
     def __init__(self, beta: float | None, phi: float | None) -> None:
         super().__init__()
-        self.learnable = beta is None and phi is None
-
-        if self.learnable:
-            self.beta = torch.nn.Parameter(torch.zeros(1))
-            self.phi = torch.nn.Parameter(torch.zeros(1))
-            self.t = torch.nn.Parameter(torch.ones(1))
-        else:
-            if beta is None or phi is None:
-                warnings.warn("Setting both beta and phi to 1.0")
-                beta, phi = 1.0, 1.0
-            self.register_buffer(
-                "beta", torch.tensor([beta], dtype=torch.float32)
-            )
-            self.register_buffer(
-                "phi", torch.tensor([phi], dtype=torch.float32)
-            )
-            self.t = None
+        if beta is None or phi is None:
+            warnings.warn("Setting both beta and phi to 1.0")
+            beta, phi = 1.0, 1.0
+        self.beta = beta
+        self.phi = phi
 
     def forward(self, saliency_map):
         k = saliency_map.numel() * 3
@@ -85,23 +73,7 @@ class MaskLoss(torch.nn.Module):
         complexity_loss = self._total_norm(saliency_map)
         variation_loss = self._total_variation(saliency_map)
 
-        if self.beta.requires_grad and self.phi.requires_grad and self.t:
-            return (
-                torch.exp(-self.beta) * complexity_loss / k
-                + torch.exp(-self.phi) * variation_loss / k
-                + (self.phi + self.beta) / self.t
-                + torch.exp(-self.t)
-            )
-        else:
-            return self.beta * complexity_loss + self.phi * variation_loss
-
-    def reset_parameters(self) -> None:
-        """Safely resets parameter values in-place without breaking tensor references."""
-        if self.learnable:
-            with torch.no_grad():
-                self.beta.zero_()
-                self.phi.zero_()
-                self.t.fill_(1.0)
+        return (self.beta * complexity_loss + self.phi * variation_loss) / k
 
     def _total_variation(self, saliency_map):
         saliency_map = torch.squeeze(saliency_map)
@@ -157,7 +129,7 @@ class SimilarityLoss(torch.nn.Module):
         sim_pos: torch.Tensor,
     ):
         """
-        @sim_pos: when equals to one, compute similarities. When equals
+        sim_pos: when equals to one, compute similarities. When equals
         to minus one, compute dissimilarities
         """
         return self.sigma * self._compute(
@@ -179,7 +151,7 @@ class PibisaConfig:
     beta: int | None = None
     phi: int | None = None
 
-    device: torch.device = torch.device("cuda")
+    device: str = "cuda"
 
 
 class PibisaAtt:
@@ -211,14 +183,15 @@ class PibisaAtt:
         self,
         query_image: torch.Tensor,
         target_emb: torch.Tensor,
-        pos_sim: torch.Tensor = torch.tensor([1], dtype=torch.long),
+        pos_sim: int = 1,
     ) -> np.ndarray:
         """Computes the PIBISA attribution. Returns the saliency map as a normalized numpy array.
-        @target_emb: The target embedding that will be used to compute the attribution. It is the
-        result of passing a target image through the backbone
-        @pos_sim: assumes the values of +1 if we want to compute similarities, or -1 if we want
+        target_emb: The target embedding that will be used to compute the attribution. It is the
+        result of passing a target image/text through the backbone
+        pos_sim: assumes the values of +1 if we want to compute similarities, or -1 if we want
         dissimilarities
         """
+        pos_sim_tensor = torch.tensor([pos_sim], dtype=torch.long)
         self.final_att = np.zeros(
             (
                 1,
@@ -229,7 +202,6 @@ class PibisaAtt:
         )
         for _ in range(self.number_masks):
             self.bottleneck_layer.reset_small_mask()
-            self.loss_mask.reset_parameters()
 
             self.optimizer.state.clear()
 
@@ -237,11 +209,11 @@ class PibisaAtt:
                 self.optimizer.zero_grad()
                 query_emb = self.bottleneck_layer(query_image)
                 query_emb = self.encoder_forward(query_emb)
-                # @target_emb is detached because its graph is not needed.
-                # @mask_final is only available after a forward pass,
+                # target_emb is detached because its graph is not needed.
+                # mask_final is only available after a forward pass,
                 # and represent the current stage of the attribution.
                 loss = self.loss_sim(
-                    query_emb, target_emb.detach(), pos_sim
+                    query_emb, target_emb.detach(), pos_sim_tensor
                 ) + self.loss_mask(self.bottleneck_layer.mask_final)
                 loss.backward(retain_graph=False)
                 self.optimizer.step()

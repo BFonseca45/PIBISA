@@ -1,5 +1,5 @@
 beta: 1
 phi: 1
-model: 'ResNET'  
-dataset: 'oxford'
+model: 'VGG'  
+dataset: 'paris'
 out_path: 'results/retrieval'

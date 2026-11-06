@@ -41,7 +41,7 @@ model = ResNET_emb(level="full")
 model = model.to(device)
 model.eval()
 
-config = src.pibisa.PibisaConfig(beta=None, phi=None, device=device)
+config = src.pibisa.PibisaConfig(beta=1, phi=1, device=device)
 pibisa = src.pibisa.PibisaAtt(model.forward, config)
 
 saliency = pibisa.compute_attribution(
