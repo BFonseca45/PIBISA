@@ -1,6 +1,5 @@
 param:
   beta: 1
-  learnable: True
 run:
   server: True
   method: 'PIBISA_ENC'

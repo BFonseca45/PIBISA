@@ -1,5 +1,4 @@
 NIB
-toy_images
 stash
 .vscode
 out
@@ -11,3 +10,5 @@ outputs
 multirun
 results
 stash
+.venv
+.bash
