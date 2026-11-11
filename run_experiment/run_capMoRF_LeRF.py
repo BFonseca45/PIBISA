@@ -1,24 +1,26 @@
+import pickle
+import warnings
+
+import clip
+import hydra
+import matplotlib.pyplot as plt
 import torch
 import torchvision
-import matplotlib.pyplot as plt
-import warnings
-import clip
-import pickle
 import tqdm
-import hydra
 import wandb
 
 warnings.filterwarnings("ignore")
 
-from PIL import Image
-from utils import *
-from metrics_pibisa import *
-from src.grad_eclip import *
-from transformers import AutoProcessor, AutoModelForVision2Seq
-from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from transformers import (
+    AutoModelForVision2Seq,
+    AutoProcessor,
+    CLIPModel,
+    CLIPProcessor,
+    CLIPTokenizerFast,
+)
 
-from NIB.scripts.plot import visualize_vandt_heatmap
+from metrics_pibisa import *
 from NIB.saliency import (
     chefer,
     fast_ig,
@@ -29,6 +31,9 @@ from NIB.saliency import (
     rise,
     saliencymap,
 )
+from src.grad_eclip import *
+from utils import *
+import src.pibisa
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -43,34 +48,6 @@ blip = AutoModelForVision2Seq.from_pretrained(
 ).to(device)
 
 
-def generate_plot(image, text, method):
-    image_feat = processor(images=image, return_tensors="pt")[
-        "pixel_values"
-    ].to(device)
-    image_features = model.get_image_features(image_feat)
-    text_ids = torch.tensor(
-        [tokenizer.encode(text, add_special_tokens=True)]
-    ).to(device)
-    text_words = tokenizer.convert_ids_to_tokens(text_ids[0].tolist())
-    text_features = model.get_text_features(text_ids)
-
-    if method in [chefer, fast_ig, gradcam, mfaba, saliencymap]:
-        vmap, tmap = method(model, processor, [text], [image])
-    elif method == rise:
-        vmap, tmap = rise(
-            model, image_feat, [text_ids], image_features, text_features
-        )
-        tmap = [tmap[0].detach().cpu().numpy()]
-    elif method == m2ib:
-        vmap, tmap = m2ib(model, [text_ids], image_feat, 0.1)
-    elif method == nib:
-        vmap, tmap = nib(model, [text_ids], image_feat, 10, 9)
-    if vmap.shape[1] == 3:
-        vmap = vmap.mean(1)
-
-    return np.squeeze(vmap[0])
-
-
 @hydra.main(
     version_base=None, config_path="./configs/", config_name="config_CLIP.yaml"
 )
@@ -78,7 +55,6 @@ def run_main(cfg: DictConfig):
     warnings.filterwarnings("ignore")
     # Passing config to variables
     beta = cfg.param.beta
-    learnable = cfg.param.learnable
     server = cfg.run.server
     method = cfg.run.method
 
@@ -88,19 +64,18 @@ def run_main(cfg: DictConfig):
             "beta": beta,
             "server": server,
             "method": method,
-            "learnable": learnable,
         },
     )
 
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = "cuda"
     else:
-        device = torch.device("cpu")
+        device = "cpu"
 
     print("Device in use: ", device)
     torch.manual_seed(0)
 
-    eval_tool = DeletionMetrics(modelForward=blip, mode="nle")
+    eval_tool = DeletionMetrics(encoder_forward=blip, observed_out="nle")
 
     transform = torchvision.transforms.Compose(
         [
@@ -112,18 +87,11 @@ def run_main(cfg: DictConfig):
         ]
     )
 
-    if server:
-        dset = torchvision.datasets.CocoCaptions(
-            root="/data/toys/coco/val2017/",
-            annFile="/data/toys/coco/annotations/captions_val2017.json",
-            transform=transform,
-        )
-    else:
-        dset = torchvision.datasets.CocoCaptions(
-            root="/home/bfcoelho/Downloads/coco/val2017/",
-            annFile="/home/bfcoelho/Downloads/coco/annotations/captions_val2017.json",
-            transform=transform,
-        )
+    dset = torchvision.datasets.CocoCaptions(
+        root="/path_to_data/coco/val2017/",
+        annFile="/path_to_data/coco/annotations/captions_val2017.json",
+        transform=transform,
+    )
     subset = torch.utils.data.Subset(dataset=dset, indices=range(1000))
 
     gen_cpu = torch.Generator(device="cpu")
@@ -149,17 +117,15 @@ def run_main(cfg: DictConfig):
     if method == "gradeclip":
         # Get model, processor, and tokenizer
         model, _ = clip.load("ViT-B/32", device=device)
-        model.get_image_features = model.encode_image
-        model.get_text_features = model.encode_text
-
-        clipmodel, preprocess = clip.load("ViT-B/32", device=device)
+        model.get_image_features = model.encode_image  # type:ignore
+        model.get_text_features = model.encode_text  # type:ignore
 
         processor = CLIPProcessor.from_pretrained(
             "openai/clip-vit-base-patch32", use_fast=True
         )
     else:
         model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(
-            device
+            device  # type:ignore
         )
         processor = CLIPProcessor.from_pretrained(
             "openai/clip-vit-base-patch32"
@@ -168,7 +134,12 @@ def run_main(cfg: DictConfig):
             "openai/clip-vit-base-patch32"
         )
 
-    for x, _ in tqdm(dloader):
+    pibisa_cfg = src.pibisa.PibisaConfig(beta=beta, phi=1, device=device)
+    pibisa = src.pibisa.PibisaAtt(
+        encoder_forward=model.get_image_features, config=pibisa_cfg
+    )
+
+    for x, _ in tqdm.tqdm(dloader):
         # Generating the caption for a given image
         x_pil = unnormalize(x)
         x = processor(images=x_pil, return_tensors="pt")["pixel_values"].to(
@@ -190,37 +161,39 @@ def run_main(cfg: DictConfig):
         # This could be joined into a selector function
         if method == "Random":
             sal = 3 * torch.rand((1, 1, 7, 7))
-            sal = nn.Upsample(size=(224, 224), mode="bicubic")(sal)
+            sal = torch.nn.Upsample(size=(224, 224), mode="bicubic")(sal)
             sal = torch.sigmoid(sal)
             sal = sal.detach().cpu().numpy()
         elif method == "PIBISA":
-            sal, _ = compute_saliency(
-                x=x,
-                x_target=y_target,
-                model=model,
-                n_masks=20,
-                beta=beta,
-                return_negative=False,
-                learnable_param=learnable,
+            sal = pibisa.compute_attribution(
+                query_image=x, target_emb=y_target
             )
         elif method == "PIBISA_ENC":
-            sal, _ = compute_saliency(
-                x=x,
-                x_target=model.get_image_features(x),
-                model=model,
-                n_masks=20,
-                beta=beta,
-                return_negative=False,
-                learnable_param=learnable,
+            sal = pibisa.compute_attribution(
+                query_image=x, target_emb=model.get_image_features(x)
             )
         elif method == "M2IB":
-            sal = generate_plot(x_pil, target_caption, m2ib)
+            sal = generate_plot(
+                x_pil,
+                target_caption,
+                m2ib,
+                tokenizer=tokenizer,
+                model=model,
+                processor=processor,
+            )
         elif method == "NIB":
-            sal = generate_plot(x_pil, target_caption, nib)
+            sal = generate_plot(
+                x_pil,
+                target_caption,
+                nib,
+                tokenizer=tokenizer,
+                model=model,
+                processor=processor,
+            )
         elif method == "gradeclip":
-            tf = clipmodel.encode_text(text)
+            tf = model.encode_text(text)
             outputs, last_feat, vs, qs, ks, attns, atten_outs, map_size = (
-                clip_encode_dense(x, n=1, clipmodel=clipmodel)
+                clip_encode_dense(x, n=1, clipmodel=model)
             )
             img_embedding = F.normalize(outputs[:, 0], dim=-1)
             tf = F.normalize(tf, dim=-1)
@@ -237,17 +210,19 @@ def run_main(cfg: DictConfig):
             resize = T.Resize((w, h))
             sal = resize(sal.unsqueeze(0))
             sal = sal.detach().cpu().numpy()
+        else:
+            raise TypeError("Insert a valid attribution method")
 
         _, morf = eval_tool.compute_score(
-            img=x,
-            y_target=target_caption,
-            saliency=sal.squeeze(),
+            image_input=x,
+            target=target_caption,
+            saliency_map=sal.squeeze(),
             metric="MoRF",
         )
         _, lerf = eval_tool.compute_score(
-            img=x,
-            y_target=target_caption,
-            saliency=sal.squeeze(),
+            image_input=x,
+            target=target_caption,
+            saliency_map=sal.squeeze(),
             metric="LeRF",
         )
 
@@ -263,33 +238,66 @@ def run_main(cfg: DictConfig):
         plt.savefig(fig_savefile)
         plt.close()
 
-        if i > 20:
-            break
+        if not (i % 5):
+            captions.append(target_caption)
 
-        # if not (i % 5):
-        #     captions.append(target_caption)
+            tosave = {"MoRF": MoRF, "LeRF": LeRF, "Captions": captions}
+            with open(savefile, "wb") as open_file:
+                pickle.dump(tosave, open_file)
 
-        #     tosave = {'MoRF':MoRF, 'LeRF':LeRF, "Captions":captions}
-        #     open_file = open(savefile, 'wb')
-        #     pickle.dump(tosave, open_file)
-        #     open_file.close()
+            MoRF_mean = np.nanmean(MoRF, axis=0)
+            LeRF_mean = np.nanmean(LeRF, axis=0)
 
-        #     MoRF_mean = np.nanmean(MoRF, axis=0)
-        #     LeRF_mean = np.nanmean(LeRF, axis=0)
-
-        #     wandb_run.log({"Meteor_MoRF": MoRF_mean[0],"Bleu_MoRF": MoRF_mean[1], "Rouge1_MoRF": MoRF_mean[2], "Rouge2_MoRF": MoRF_mean[3], "RougeL_MoRF": MoRF_mean[4]})
-        #     wandb_run.log({"Meteor_LeRF": LeRF_mean[0],"Bleu_LeRF": LeRF_mean[1], "Rouge1_LeRF": LeRF_mean[2], "Rouge2_LeRF": LeRF_mean[3], "RougeL_LeRF": LeRF_mean[4]})
-
-        # fig_savefile = './out/clip_images/saliency' + str(i) + method + '.png'
-        # plt.imshow(x_pil)
-        # plt.imshow(sal, cmap='turbo', alpha=0.5)
-        # plt.title('Image n ' + str(i))
-        # plt.axis('off')
-
-        # plt.savefig(fig_savefile)
-        # plt.close()
-
+            wandb_run.log(
+                {
+                    "Meteor_MoRF": MoRF_mean[0],
+                    "Bleu_MoRF": MoRF_mean[1],
+                    "Rouge1_MoRF": MoRF_mean[2],
+                    "Rouge2_MoRF": MoRF_mean[3],
+                    "RougeL_MoRF": MoRF_mean[4],
+                }
+            )
+            wandb_run.log(
+                {
+                    "Meteor_LeRF": LeRF_mean[0],
+                    "Bleu_LeRF": LeRF_mean[1],
+                    "Rouge1_LeRF": LeRF_mean[2],
+                    "Rouge2_LeRF": LeRF_mean[3],
+                    "RougeL_LeRF": LeRF_mean[4],
+                }
+            )
         i += 1
+
+
+def generate_plot(image, text, method, model, tokenizer, processor):
+    image_feat = processor(images=image, return_tensors="pt")[
+        "pixel_values"
+    ].to(device)
+    image_features = model.get_image_features(image_feat)
+    text_ids = torch.tensor(
+        [tokenizer.encode(text, add_special_tokens=True)]
+    ).to(device)
+    text_words = tokenizer.convert_ids_to_tokens(text_ids[0].tolist())
+    text_features = model.get_text_features(text_ids)
+
+    if method in [chefer, fast_ig, gradcam, mfaba, saliencymap]:
+        vmap, tmap = method(model, processor, [text], [image])
+    elif method == rise:
+        vmap, tmap = rise(
+            model, image_feat, [text_ids], image_features, text_features
+        )
+        tmap = [tmap[0].detach().cpu().numpy()]
+    elif method == m2ib:
+        vmap, tmap = m2ib(model, [text_ids], image_feat, 0.1)
+    elif method == nib:
+        vmap, tmap = nib(model, [text_ids], image_feat, 10, 9)
+    else:
+        raise TypeError("Choose a valid attribution method")
+
+    if vmap.shape[1] == 3:
+        vmap = vmap.mean(1)
+
+    return np.squeeze(vmap[0])
 
 
 if __name__ == "__main__":

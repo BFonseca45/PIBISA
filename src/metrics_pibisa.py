@@ -1,11 +1,11 @@
+from typing import Literal
+
+import evaluate
 import numpy as np
 import torch
-import evaluate
-
 from transformers import AutoProcessor
-from tqdm import tqdm
+
 from src.utils import unnormalize
-from typing import Literal
 
 
 class DeletionMetrics:
@@ -43,13 +43,13 @@ class DeletionMetrics:
         }[observed_out]
 
     def _logit_sim(self, input_image: torch.Tensor, target: torch.Tensor):
-        """@target is the index that represents the original predicted class"""
+        """target is the index that represents the original predicted class"""
         preds = self.encoder_forward(input_image)
         preds = torch.nn.functional.softmax(preds, dim=1)
         return preds[0, target].detach().cpu().numpy()
 
     def _cosine_sim(self, input_image: torch.Tensor, target: torch.Tensor):
-        """@target is the embedding obtained by passing the target input through
+        """target is the embedding obtained by passing the target input through
         its backbone. The embedding can be obtained either from text, or from another
         image.
         """
@@ -107,7 +107,7 @@ class DeletionMetrics:
         self,
         image_input: torch.Tensor,
         target: torch.Tensor | str,
-        saliency_map: np.typing.NDArray,
+        saliency_map: np.ndarray,
         metric: Literal["MoRF", "LeRF"] = "MoRF",
     ) -> tuple[np.ndarray, float]:
 

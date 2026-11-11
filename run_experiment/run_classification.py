@@ -1,22 +1,21 @@
 import sys
 
-sys.path.insert(0, "/home/bfcoelho/Documents/Scripts/CIBISA/src")
+sys.path.insert(0, "/path_to_repo/PIBISA/src/")
 
 import csv
 
-import numpy as np
-import torch
 import hydra
-
+import numpy as np
+import omegaconf
+import torch
 import torch.utils.data
 import torchvision
 import torchvision.datasets.imagenet
 import tqdm
-import omegaconf
 
+import src.metrics_pibisa
 import src.pibisa
 import src.utils
-import src.metrics_pibisa
 
 
 @hydra.main(
@@ -25,14 +24,14 @@ import src.metrics_pibisa
     config_name="config_classification.yaml",
 )
 def run_main(cfg: omegaconf.DictConfig):
-    csv_file, json_file = src.utils.create_save_folder(
+    csv_file, _ = src.utils.create_save_folder(
         cfg=cfg, metrics_list=["MoRF", "LeRF"]
     )
 
     if torch.cuda.is_available():
-        device = torch.device("cuda")
+        device = "cuda"
     else:
-        device = torch.device("cpu")
+        device = "cpu"
 
     transform = torchvision.transforms.Compose(
         [
@@ -54,11 +53,11 @@ def run_main(cfg: omegaconf.DictConfig):
     gen_cpu.manual_seed(45)
 
     dataset = torchvision.datasets.imagenet.ImageNet(
-        root="/nas-ctm01/datasets/public/ImageNet/",
+        root="/path_to_dataset/ImageNet/",
         split="val",
         transform=transform,
     )
-    sub_set = torch.utils.data.Subset(dataset=dataset, indices=range(0, 10000))
+    sub_set = torch.utils.data.Subset(dataset=dataset, indices=range(10000))
     data_loader = torch.utils.data.DataLoader(
         dataset=sub_set,
         batch_size=1,

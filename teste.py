@@ -8,9 +8,9 @@ import src.pibisa
 from src.models import ResNET_emb
 
 if torch.cuda.is_available():
-    device = torch.device("cuda:0")
+    device = "cuda"
 else:
-    device = torch.device("cpu")
+    device = "cpu"
 
 torch.manual_seed(0)
 

@@ -1,6 +1,6 @@
 import sys
 
-sys.path.insert(0, "/home/bfcoelho/Documents/Scripts/CIBISA/src/")
+sys.path.insert(0, "/path_to_repo/PIBISA/src/")
 
 # Imports
 import csv
@@ -29,7 +29,6 @@ import NIB.scripts.data
 import src.grad_eclip
 import src.metrics_NIB
 import src.pibisa
-from src.utils import create_save_folder
 
 # Setup environment variables
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -59,8 +58,6 @@ def setup_seed(seed=0):
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-
-    return
 
 
 def run_rise(args, model, image_processed, tid, im_f, tf):
@@ -151,7 +148,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--method",
         type=str,
-        default="cibisa",
+        default="pibisa",
         choices=[
             "chefer",
             "gradcam",
@@ -161,13 +158,12 @@ if __name__ == "__main__":
             "rise",
             "m2ib",
             "nib",
-            "cibisa",
-            "cibisa_enc",
+            "pibisa",
+            "pibisa_enc",
         ],
     )
     argparser.add_argument("--beta", type=float, default=2)
     argparser.add_argument("--phi", type=float, default=2)
-    argparser.add_argument("--learn", type=bool, default=False)
     argparser.add_argument("--num_steps", type=int, default=10)
     argparser.add_argument("--target_layer", type=int, default=9)
     argparser.add_argument(
@@ -188,7 +184,7 @@ if __name__ == "__main__":
     setup_seed(seed=args.seed)
 
     # Constants
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     batch_size = args.batch_size
     num_workers = args.num_workers
     loss_fn = torch.nn.CosineSimilarity(eps=1e-6)
@@ -205,8 +201,8 @@ if __name__ == "__main__":
                 "openai/clip-vit-base-patch32"
             )
             .eval()
-            .to(device)
-        )  # type:ignore
+            .to(device)  # type:ignore
+        )
 
     processor = transformers.CLIPProcessor.from_pretrained(
         "openai/clip-vit-base-patch32", use_fast=True
@@ -226,10 +222,7 @@ if __name__ == "__main__":
         )
 
     # Create dataset
-    if args.dataset == "GoogleAIConceptualCations":
-        pass
-
-    elif args.dataset == "Flickr8kDataset":
+    if args.dataset == "Flickr8kDataset":
         dataset = NIB.scripts.data.Flickr8kDataset(
             image_preprocessor=processor,
             transform=torchvision.transforms.v2.Compose(
@@ -252,6 +245,10 @@ if __name__ == "__main__":
                 [torchvision.transforms.v2.ToImage()]
             ),
         )
+    else:
+        raise TypeError(
+            "Select a valid dataset. Options: 'Flickr8kDataset', 'MSCXRDataset', 'MSCocoDataset' "
+        )
 
     # Create dataloader
     dataloader = torch.utils.data.DataLoader(
@@ -264,13 +261,13 @@ if __name__ == "__main__":
     )
 
     # Initialize lists to store results
-    image_fnames = list()
-    image_saliency = list()
-    text_saliency = list()
-    images_processed = list()
-    text_features = list()
-    image_features = list()
-    text_ids = list()
+    image_fnames = []
+    image_saliency = []
+    text_saliency = []
+    images_processed = []
+    text_features = []
+    image_features = []
+    text_ids = []
 
     # Go through the data
     for batch_idx, batch in tqdm.tqdm(enumerate(dataloader)):
@@ -280,8 +277,9 @@ if __name__ == "__main__":
         image_processed = batch["image_processed"]
 
         # Special Case: Flickr8kDataset has several captions for the same image
-        if isinstance(dataset, NIB.scripts.data.Flickr8kDataset) or isinstance(
-            dataset, NIB.scripts.data.MSCocoDataset
+        if isinstance(
+            dataset,
+            (NIB.scripts.data.Flickr8kDataset, NIB.scripts.data.MSCocoDataset),
         ):
             with torch.no_grad():
                 new_caption = []
@@ -350,12 +348,7 @@ if __name__ == "__main__":
     vincr = sum(vincrs) / len(vincrs)
 
     print("Dataset: ", args.dataset)
-    print(
-        "Results for beta equals to: "
-        + str(args.beta)
-        + "Learnable: "
-        + str(args.learn)
-    )
+    print("Results for beta equals to: " + str(args.beta))
     print("vdrop:", vdrop, "vincr:", vincr)
 
     csv_file = os.path.join(
